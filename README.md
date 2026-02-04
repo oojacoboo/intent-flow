@@ -20,7 +20,7 @@ It allows an AI Agent to "drive" a strict, high-fidelity application by mapping 
 
 The core primitive of this framework is the **Flow**.
 
-A Flow is a packaged unit of functionality—like a "Payment," a "Profile Update," or a "Maintenance Request." Unlike a static web page, a Flow is portable. It exists independently of your app's routing table, waiting to be summoned by an Agent.
+A Flow is a packaged unit of functionality, like a "Payment," a "Profile Update," or a "Report" Unlike a static web page, a Flow is portable. It exists independently of your app's routing table, waiting to be summoned by an Agent.
 
 Each Flow encapsulates:
 
