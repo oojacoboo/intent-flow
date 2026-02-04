@@ -2,169 +2,77 @@
 
 ### Map Natural Language to UI Flows.
 
-**A Framework for Server-Driven, AI-Orchestrated Applications.**
+**A Framework for AI-Orchestrated Applications.**
 
 ---
 
-## 💡 The Problem
+## 💡 The Philosophy
 
-AI Agents are powerful, but relying on them to build user interfaces is risky.
+We are entering the age of the **AI Runtime**, but our current UI paradigms are stuck in the past.
 
-* **Standard Chatbots** generate hallucinated HTML widgets that don't look like your brand or connect to your app's state.
-* **Standard Apps** force users to manually navigate deep menus to find features.
+* **Chatbots are too vague.** They rely on ephemeral text or "hallucinated" widgets that lack deep integration with your business logic.
+* **Traditional Apps are too rigid.** They require users to navigate complex hierarchies manually.
 
-## 🚀 The Solution: IntentFlow
+**IntentFlow** introduces a third way: **Intent-Driven Architecture.**
+It allows an AI Agent to "drive" a strict, high-fidelity application by mapping vague natural language to precise, pre-defined workflows.
 
-**IntentFlow** is an orchestration engine that allows your AI Agent (Server) to "drive" your application by mapping natural language intents to strict, pre-defined UI flows.
+## 🌊 What is a "Flow"?
 
-* **Server-Driven Intent:** The Logic and State live securely on the server.
-* **Zero Hallucinations:** The AI selects from a strict registry of components; it never "invents" the UI.
-* **Universal Runtime:** Define your flow *once*. Run it inside your **Mobile/Web App** OR inside **Claude/ChatGPT** (via MCP).
+The core primitive of this framework is the **Flow**.
 
----
+A Flow is a packaged unit of functionality—like a "Payment," a "Profile Update," or a "Maintenance Request." Unlike a static web page, a Flow is portable. It exists independently of your app's routing table, waiting to be summoned by an Agent.
 
-## 🏗 Architecture
+Each Flow encapsulates:
 
-IntentFlow uses a "Shared Brain, Universal Body" architecture.
+1. **Intent Schema:** The data required to initialize the interaction.
+2. **Visual State:** The human-designed UI components (Native or Web).
+3. **Business Logic:** The state machine that governs valid transitions and mutations.
 
-```mermaid
-graph TD
-    User["User Input ('Pay Rent')"] --> Agent[Server / AI Agent]
-    Agent -->|1. Identifies Intent| Registry[Intent Registry]
-    Registry -->|2. Returns Schema| Agent
-    Agent -->|3. Sends JSON Protocol| Client[Client Adapter]
-    
-    subgraph "Universal UI Library"
-        direction TB
-        PaymentFlow["PaymentFlow Component"]
-    end
-    
-    Client -->|4a. Your App| App["Render <PaymentFlow /> (React / React Native)"]
-    Client -->|4b. MCP / Chat| HTML["Render HTML String (React DOM)"]
+## 🏗 The Architecture
 
-```
+IntentFlow is not a UI library. It is a **Protocol** that separates the "Brain" from the "Body."
 
-### The "Intent Protocol" (JSON)
+### 1. The Brain (Server)
 
-Instead of sending code over the wire, IntentFlow sends **Instructions**. This keeps payloads tiny, secure, and platform-agnostic.
+The Agent acts as the orchestration engine.
 
-```json
-{
-  "type": "RENDER",
-  "component": "tenant.payment_card",
-  "props": {
-    "amount": 1200,
-    "recipient": "RentPost Property Mgmt",
-    "dueDate": "2026-02-01"
-  },
-  "displayMode": "modal"
-}
+* It listens to user prompts (e.g., "Pay my rent").
+* It scans the **Flow Registry** to find a matching capability.
+* It hydrates the Flow with data from your database (e.g., pulling the current balance).
+* It emits a **Protocol Instruction** (JSON)—not HTML or Code.
 
-```
+### 2. The Protocol (The Wire)
 
----
+The connection between the Agent and the User is an abstract JSON definition. This ensures security and stability. The AI cannot "invent" new screens; it can only request to render screens that you have explicitly built and approved.
 
-## 💻 Usage
+### 3. The Body (Universal Client)
 
-### 1. Define the Intent (The Brain)
+Your application (whether it's a Native iOS App, a Web Dashboard, or an MCP Server) listens for these instructions.
 
-Create a strict contract for what the AI is allowed to do.
+* When it receives a `RENDER` instruction, it looks up the corresponding component in its local library.
+* It renders the **Native UI** for that platform.
+* On **Mobile**, it renders a React Native view.
+* On **Web**, it renders a DOM element.
+* In **Chat**, it renders an HTML widget.
 
-```typescript
-// packages/core/flows/payment.config.ts
-import { defineFlow } from '@intentflow/core';
-import { z } from 'zod';
 
-export const PaymentFlow = defineFlow({
-  id: 'tenant.pay_rent',
-  description: 'Initiates a rent payment workflow',
-  schema: z.object({
-    amount: z.number().describe('The amount to pay in USD'),
-    dueDate: z.string().date()
-  })
-});
 
-```
+## 🚀 Why IntentFlow?
 
-### 2. Build the Component (The Body)
+### For The Business
 
-Use standard React components. These can be shared across your web dashboard, mobile app, and MCP server.
+* **Brand Consistency:** Your AI Agent uses the exact same UI components as your main application. No "off-brand" chat widgets.
+* **Safety:** The AI cannot hallucinate a button that performs an illegal action. It is constrained to the Flows you define.
 
-```tsx
-// packages/ui/flows/PaymentCard.tsx
-import { View, Text, Button } from '@intentflow/primitives';
+### For The Developer
 
-export const PaymentCard = ({ amount, dueDate }) => (
-  <View style={{ padding: 20 }}>
-    <Text style={{ fontSize: 18 }}>Pay ${amount}</Text>
-    <Text style={{ color: 'gray' }}>Due: {dueDate}</Text>
-    <Button onPress={() => submitPayment()}>Confirm</Button>
-  </View>
-);
+* **Write Once, Run Everywhere:** Build a "Payment Flow" once. The Agent can surface it inside your mobile app, on your website, or inside external tools like Claude/ChatGPT via MCP.
+* **Separation of Concerns:** Your AI logic lives on the server. Your UI code lives on the client. The Protocol bridges them.
 
-```
+## 🔮 The Vision
 
-### 3. Register & Orchestrate (The Runtime)
-
-**In Your Application:**
-The app loads the registry and listens for the protocol.
-
-```tsx
-// apps/client/App.tsx
-import { IntentRenderer } from '@intentflow/react';
-import { PaymentCard } from '@my-org/ui';
-
-const registry = {
-  'tenant.pay_rent': PaymentCard
-};
-
-export default function App() {
-  const { currentIntent } = useIntentFlow(); // Listens to Server
-  
-  if (!currentIntent) return <ChatInterface />;
-  
-  return <IntentRenderer config={currentIntent} registry={registry} />;
-}
-
-```
+IntentFlow aims to be the standard implementation of **Server-Driven UI (SDUI)** for the Agentic Age. We believe that in the future, applications won't be navigated by clicking links; they will be orchestrated by intents.
 
 ---
-
-## 🔌 Supported Runtimes
-
-| Runtime | Technology | Output | Use Case |
-| --- | --- | --- | --- |
-| **Mobile App** | React Native / Expo | IOS/Android Views | Your core product experience. |
-| **Web Dashboard** | Next.js / React | DOM Elements | Your standard SaaS web app. |
-| **MCP Server** | Node.js + `ext-apps` | HTML String | Rendering UI inside Claude, Cursor, or ChatGPT. |
-
----
-
-## ❓ FAQ
-
-**Q: How is this different from Vercel AI SDK / A2UI?**
-A: Those tools focus on *Generative UI* (letting the AI invent the layout). **IntentFlow** focuses on *Application Orchestration*. We believe business software requires strict adherence to design systems and legal flows. The AI chooses the *Component*, not the *CSS*.
-
-**Q: Do I need to use React Native?**
-A: No. While IntentFlow works perfectly with React Native for mobile apps, you can use standard React DOM for web-only or MCP-only implementations. The protocol is agnostic.
-
-**Q: Can I use this with any Agent?**
-A: Yes. IntentFlow is model-agnostic. It works with OpenAI, Anthropic, Gemini, or local Llama models.
-
----
-
-## 🗺 Roadmap
-
-* [ ] **Core:** Define strict JSON Protocol schema.
-* [ ] **SDK:** Release `@intentflow/react` hooks.
-* [ ] **Adapter:** Build standard MCP Server adapter for rendering React to HTML strings.
-* [ ] **CLI:** `npx intentflow create` scaffolding tool.
-
----
-
-## 🤝 Contributing
-
-We are currently in the **Alpha** conceptual phase.
-Discussions, PRs, and architectural proposals are welcome in the Issues tab.
 
 **License:** MIT
