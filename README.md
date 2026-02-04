@@ -54,7 +54,7 @@ User: "Order my usual"
                                                │ │ Cappuccino  │ │
                                                │ │ Large, Oat  │ │
                                                │ │             │ │
-                                               │ │ [Place Order]│ │
+                                               │ │[Place Order]│ │
                                                │ └─────────────┘ │
                                                │    Your real    │
                                                │    React UI     │
