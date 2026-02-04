@@ -1,0 +1,6 @@
+##################################
+#     IntentFlow Git Ignore      #
+##################################
+
+# Configs
+.claude/settings.local.json
