@@ -1,6 +1,6 @@
 # IntentFlow
 
-### Map Natural Language to UI Flows.
+### Map Natural Language (Intent) to UI Flows.
 
 **A Framework for AI-Orchestrated Applications.**
 
