@@ -55,6 +55,44 @@ Your application (whether it's a Native iOS App, a Web Dashboard, or an MCP Serv
 * On **Web**, it renders a DOM element.
 * In **Chat**, it renders an HTML widget.
 
+## How it Works?
+
+1. **The Input:**
+* **User (Mobile Client):** "Send $20 to Sally for lunch."
+* **Mobile Client App:** Sends `POST /api/agent/prompt { text: "Send $20 to Sally for lunch." }` to your server.
+
+2. **The "Brain" (Server):**
+* **The Agent:** Processes the text. It looks at its available tools and decides: *"This user wants to trigger the Payment Flow."*
+* **The Logic:** It fetches the necessary data (Contact: Sally, Available Balance: $30) from your database.
+* **The Output:** It constructs the **JSON Instruction**.
+
+3. **The "Wire" (The Protocol):**
+* The server responds to the mobile app with this JSON payload:
+
+```json
+{
+  "type": "render_intent",
+  "intent": "user.make_payment",
+  "props": {
+    "amount": 20,
+    "recipient": {
+      "id": **UUID**,
+      "name": "Sally Smith"
+    }
+    "paymentMethod": {
+      "id": **UUID**,
+      "name": "BoA Credit Card"
+    }
+  }
+}
+
+```
+
+4. **The "Body/View" (Mobile Client):**
+* The Mobile App receives the JSON.
+* It looks up `"user.make_payment"` in its **local Component Registry**.
+* It finds `import PaymentScreen from './screens/PaymentScreen'`.
+* It **mounts** that component, passing in the `props` (`amount={20}, recipient, paymentMetod`).
 
 
 ## 🚀 Why IntentFlow?
