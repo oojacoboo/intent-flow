@@ -1,115 +1,374 @@
 # IntentFlow
 
-### Map Natural Language (Intent) to UI Flows.
+**A Protocol for AI-Orchestrated Applications**
 
-**A Framework and Protocol for AI-Orchestrated Applications.**
+> Build applications where AI orchestrates real UI—not hallucinated widgets.
 
 ---
 
-## 💡 The Philosophy
+## The Problem
 
-We are entering the age of the **AI Runtime**, but our current UI paradigms are stuck in the past.
+We're building AI into our applications wrong.
 
-* **Chatbots are too vague.** They rely on ephemeral text or "hallucinated" widgets that lack deep integration with your business logic.
-* **Traditional Apps are too rigid.** They require users to navigate complex hierarchies manually.
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                                                                             │
+│   TRADITIONAL APPS                 CHATBOTS                                 │
+│   ────────────────                 ────────                                 │
+│   ✓ Real UI                        ✗ Text-only or fake widgets              │
+│   ✓ Type-safe                      ✗ Hallucinated responses                 │
+│   ✓ Business logic                 ✗ No real integration                    │
+│   ✗ Rigid navigation               ✓ Natural language                       │
+│   ✗ Manual discovery               ✓ Conversational                         │
+│                                                                             │
+│                        What if you could have both?                         │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
 
-**IntentFlow** introduces a third way: **Intent-Driven Architecture.**
-It allows an AI Agent to "drive" a strict, high-fidelity application by mapping vague natural language to precise, pre-defined workflows.
+**Traditional apps** are powerful but rigid. Users must learn navigation hierarchies to accomplish tasks.
 
-## 🌊 What is a "Flow"?
+**Chatbots** are flexible but shallow. They generate text responses or ephemeral widgets with no real connection to your business logic. Users don't trust them for real transactions.
 
-The core primitive of this framework is the **Flow**.
+## The Solution
 
-A Flow is a packaged unit of functionality, like a "Payment," a "Profile Update," or a "Report" Unlike a static web page, a Flow is portable. It exists independently of your app's routing table, waiting to be summoned by an Agent.
+**IntentFlow** is a protocol that lets AI orchestrate your real application UI.
 
-Each Flow encapsulates:
+```
+User: "Order my usual"
+         │
+         ▼
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│                 │     │                 │     │                 │
+│   AI matches    │────▶│  Server builds  │────▶│  Client renders │
+│   intent to     │     │  props from     │     │  native UI      │
+│   "order.place" │     │  your database  │     │  component      │
+│                 │     │                 │     │                 │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+                                                        │
+                                                        ▼
+                                               ┌─────────────────┐
+                                               │ ┌─────────────┐ │
+                                               │ │ Order       │ │
+                                               │ │ ─────────── │ │
+                                               │ │ Cappuccino  │ │
+                                               │ │ Large, Oat  │ │
+                                               │ │             │ │
+                                               │ │ [Place Order]│ │
+                                               │ └─────────────┘ │
+                                               │    Your real    │
+                                               │    React UI     │
+                                               └─────────────────┘
+```
 
-1. **Intent Schema:** The data required to initialize the interaction.
-2. **Visual State:** The human-designed UI components (Native or Web).
-3. **Business Logic:** The state machine that governs valid transitions and mutations.
+The AI doesn't generate UI—it **selects** from pre-built, type-safe Flows you control.
 
-## 🏗 The Architecture
+---
 
-IntentFlow is not a UI library. It is a **Protocol** that separates the "Brain" from the "Body."
+## How It Works
 
-### 1. The Brain (Server)
+### The Architecture
 
-The Agent acts as the orchestration engine.
+```mermaid
+flowchart TB
+    subgraph User
+        input["'Order a large latte'"]
+    end
 
-* It listens to user prompts (e.g., "Pay my rent").
-* It scans the **Flow Registry** to find a matching capability.
-* It hydrates the Flow with data from your database (e.g., pulling the current balance).
-* It emits a **Protocol Instruction** (JSON)—not HTML or Code.
+    subgraph Brain ["Server (The Brain)"]
+        ai["AI Orchestration"]
+        registry["Flow Registry"]
+        hydrate["Hydration Layer"]
+        ai --> registry
+        registry --> hydrate
+    end
 
-### 2. The Protocol (The Wire)
+    subgraph Protocol ["JSON Protocol (The Wire)"]
+        msg["{ type: RENDER, intentId: order.place, props: {...} }"]
+    end
 
-The connection between the Agent and the User is an abstract JSON definition. This ensures security and stability. The AI cannot "invent" new screens; it can only request to render screens that you have explicitly built and approved.
+    subgraph Body ["Clients (The Body)"]
+        mobile["Mobile App<br/>(React Native)"]
+        web["Web App<br/>(React DOM)"]
+        mcp["MCP Server<br/>(Claude/ChatGPT)"]
+    end
 
-### 3. The Body (Universal Client)
+    input --> ai
+    hydrate --> msg
+    msg --> mobile
+    msg --> web
+    msg --> mcp
+```
 
-Your application (whether it's a Native iOS App, a Web Dashboard, or an MCP Server) listens for these instructions.
+| Layer | Responsibility |
+|-------|----------------|
+| **Brain** | AI matches intents, fetches data, manages state |
+| **Wire** | JSON protocol defines what to render—not how |
+| **Body** | Native UI per platform (mobile, web, MCP) |
 
-* When it receives a `RENDER` instruction, it looks up the corresponding component in its local library.
-* It renders the **Native UI** for that platform.
-* On **Mobile**, it renders a React Native view.
-* On **Web**, it renders a DOM element.
-* In **Chat**, it renders an HTML widget.
+### The Flow
 
-## How it Works?
+A **Flow** is the core primitive—a self-contained unit of functionality:
 
-1. **The Input:**
-* **User (Mobile Client):** "Send $20 to Sally for lunch."
-* **Mobile Client App:** Sends `POST /api/agent/prompt { text: "Send $20 to Sally for lunch." }` to your server.
+```typescript
+// Definition: What data is needed + what states are valid
+export const placeOrderFlow = defineFlow({
+  intentId: 'order.place',
 
-2. **The "Brain" (Server):**
-* **The Agent:** Processes the text. It looks at its available tools and decides: *"This user wants to trigger the Payment Flow."*
-* **The Logic:** It fetches the necessary data (Contact: Sally, Available Balance: $30) from your database.
-* **The Output:** It constructs the **JSON Instruction**.
+  schema: z.object({
+    items: z.array(orderItemSchema),
+    location: z.object({ name: z.string(), estimatedTime: z.number() }),
+    paymentMethods: z.array(paymentMethodSchema),
+  }),
 
-3. **The "Wire" (The Protocol):**
-* The server responds to the mobile app with this JSON payload:
+  machine: createMachine({
+    initial: 'review',
+    states: {
+      review: { on: { CONFIRM: 'processing', CANCEL: 'cancelled' } },
+      processing: { on: { SUCCESS: 'confirmed', FAILURE: 'error' } },
+      confirmed: { type: 'final' },
+      error: { on: { RETRY: 'processing' } },
+      cancelled: { type: 'final' },
+    },
+  }),
+})
+```
+
+```tsx
+// Component: How it renders (universal React)
+export function PlaceOrderFlow() {
+  const props = useFlowProps()
+  const state = useFlowState()
+  const dispatch = useFlowDispatch()
+
+  if (state.matches('review')) {
+    return (
+      <Card>
+        <OrderSummary items={props.items} />
+        <Button onPress={() => dispatch('CONFIRM')}>Place Order</Button>
+      </Card>
+    )
+  }
+  // ... other states
+}
+```
+
+### The Protocol Message
+
+The server sends JSON instructions—not HTML, not code:
 
 ```json
 {
-  "type": "render_intent",
-  "intent": "user.make_payment",
+  "type": "RENDER",
+  "intentId": "order.place",
+  "instanceId": "flow_abc123",
   "props": {
-    "amount": 20,
-    "recipient": {
-      "id": **UUID**,
-      "name": "Sally Smith"
-    }
-    "paymentMethod": {
-      "id": **UUID**,
-      "name": "BoA Credit Card"
-    }
-  }
+    "items": [{ "name": "Cappuccino", "size": "large", "price": 4.50 }],
+    "location": { "name": "123 Main St", "estimatedTime": 8 },
+    "paymentMethods": [{ "id": "pm_1", "label": "Visa ••4242" }]
+  },
+  "displayMode": "fullscreen"
 }
-
 ```
 
-4. **The "Body/View" (Mobile Client):**
-* The Mobile App receives the JSON.
-* It looks up `"user.make_payment"` in its **local Component Registry**.
-* It finds `import PaymentScreen from './screens/PaymentScreen'`.
-* It **mounts** that component, passing in the `props` (`amount={20}, recipient, paymentMetod`).
+The client looks up `order.place` in its component registry and renders your real UI.
 
+---
 
-## 🚀 Why IntentFlow?
+## Why IntentFlow?
 
-### For The Business
+### vs. Traditional Apps
 
-* **Brand Consistency:** Your AI Agent uses the exact same UI components as your main application. No "off-brand" chat widgets.
-* **Safety:** The AI cannot hallucinate a button that performs an illegal action. It is constrained to the Flows you define.
+| Traditional | IntentFlow |
+|-------------|------------|
+| Open app → Menu → Drinks → Lattes → Customize → Add to cart | "Order a large oat milk latte" |
+| Navigate to Orders → Find order → Tap for details | "Where's my order?" |
+| Same UI components, rigid navigation | Same UI components, instant access |
 
-### For The Developer
+### vs. Chatbots
 
-* **Write Once, Run Everywhere:** Build a "Payment Flow" once. The Agent can surface it inside your mobile app, on your website, or inside external tools like Claude/ChatGPT via MCP.
-* **Separation of Concerns:** Your AI logic lives on the server. Your UI code lives on the client. The Protocol bridges them.
+| Chatbots | IntentFlow |
+|----------|------------|
+| AI generates text/widgets | AI selects your real components |
+| "I can help you order..." (text only) | Renders actual order form |
+| Hallucination risk | Constrained to registered Flows |
+| No real business logic | Full state machines, type-safe props |
 
-## 🔮 The Vision
+### The Benefits
 
-IntentFlow aims to be the standard implementation of **Server-Driven UI (SDUI)** for the Agentic Age. We believe that in the future, applications won't be navigated by clicking links; they will be orchestrated by intents.
+**For Developers:**
+- **Write once, render everywhere** — Same Flow works on mobile, web, and MCP
+- **Type-safe end-to-end** — Zod schemas validate props, XState governs transitions
+- **Separation of concerns** — AI logic on server, UI on client, protocol bridges them
+
+**For Business:**
+- **Brand consistency** — AI uses your exact design system, not generic widgets
+- **Safety** — AI cannot hallucinate actions outside your Flow Registry
+- **Future-proof** — Your Flows become tools for Claude, ChatGPT, and future agents via MCP
+
+---
+
+## Universal Rendering
+
+One Flow definition renders appropriately on every platform:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                            order.place Flow                                 │
+├─────────────────────┬─────────────────────┬─────────────────────────────────┤
+│                     │                     │                                 │
+│   📱 Mobile         │   💻 Web            │   🤖 MCP (Claude)               │
+│   (React Native)    │   (React DOM)       │   (HTML)                        │
+│                     │                     │                                 │
+│  ┌───────────────┐  │  ┌───────────────┐  │  ┌─────────────────────────┐    │
+│  │ Review Order  │  │  │ Review Order  │  │  │ ## Order Summary        │    │
+│  │               │  │  │               │  │  │                         │    │
+│  │ Cappuccino    │  │  │ Cappuccino    │  │  │ - Cappuccino (large)    │    │
+│  │ Large · $4.50 │  │  │ Large · $4.50 │  │  │   $4.50                 │    │
+│  │               │  │  │               │  │  │                         │    │
+│  │ [Place Order] │  │  │ [Place Order] │  │  │ Ready in ~8 min         │    │
+│  │               │  │  │               │  │  │                         │    │
+│  │ Native View   │  │  │ DOM Element   │  │  │ Say "confirm" to order  │    │
+│  └───────────────┘  │  └───────────────┘  │  └─────────────────────────┘    │
+│                     │                     │                                 │
+└─────────────────────┴─────────────────────┴─────────────────────────────────┘
+```
+
+---
+
+## Technical Overview
+
+### Recommended Stack
+
+| Layer | Technology |
+|-------|------------|
+| Schemas | [Zod](https://zod.dev) — Runtime validation |
+| State Machines | [XState](https://xstate.js.org) — Finite state logic |
+| Universal UI | [Tamagui](https://tamagui.dev) or React Native Web |
+| AI Orchestration | Vercel AI SDK, LangChain, or direct LLM APIs |
+| Transport | HTTP, WebSocket, SSE, or MCP |
+
+### Protocol Messages
+
+| Message | Direction | Purpose |
+|---------|-----------|---------|
+| `RENDER` | Server → Client | Display a Flow |
+| `TRANSITION` | Server → Client | Update Flow state |
+| `PROPS_UPDATE` | Server → Client | Patch props (streaming) |
+| `EVENT` | Client → Server | User interaction |
+| `DISMISS` | Server → Client | Remove a Flow |
+| `ERROR` | Server → Client | Error with recovery options |
+
+### Flow Lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> Invoke: User prompt
+    Invoke --> Hydrate: Intent matched
+    Hydrate --> Render: Props fetched
+    Render --> Interact: UI displayed
+    Interact --> Interact: State transitions
+    Interact --> Mutate: Terminal action
+    Mutate --> Complete: Success
+    Complete --> [*]
+```
+
+---
+
+## Documentation
+
+Deep-dive into the concepts, protocol, and implementation guides:
+
+### Concepts
+- **[Philosophy](./docs/philosophy.md)** — Why Intent-Driven Architecture
+- **[Flows](./docs/concepts/flows.md)** — The core primitive explained
+- **[Intents](./docs/concepts/intents.md)** — Matching and entity extraction
+- **[Registry](./docs/concepts/registry.md)** — Discovery, permissions, versioning
+- **[Rendering](./docs/concepts/rendering.md)** — Universal UI model
+
+### Protocol
+- **[Overview](./docs/protocol/overview.md)** — Design principles
+- **[Messages](./docs/protocol/messages.md)** — Complete message reference
+- **[Transport](./docs/protocol/transport.md)** — HTTP, WebSocket, SSE, MCP
+- **[Errors](./docs/protocol/errors.md)** — Error handling patterns
+
+### Guides
+- **[Building Flows](./docs/guides/building-flows.md)** — Step-by-step tutorial
+- **[AI Orchestration](./docs/guides/ai-orchestration.md)** — LLM integration patterns
+- **[MCP Integration](./docs/guides/mcp-integration.md)** — Claude/ChatGPT tools
+
+---
+
+## Status
+
+IntentFlow is in **active specification development**.
+
+We're defining the protocol, APIs, and reference patterns. Implementation packages are planned but not yet released.
+
+### Roadmap
+
+- [x] Core specification
+- [x] Protocol message format
+- [x] Documentation
+- [ ] `@intentflow/core` — Schema and state machine utilities
+- [ ] `@intentflow/react` — React bindings and hooks
+- [ ] `@intentflow/ui` — Universal component primitives
+- [ ] `@intentflow/mcp` — MCP server adapter
+- [ ] Reference implementation
+
+### Get Involved
+
+This is an open specification. We welcome:
+
+- **Feedback** on the protocol design
+- **Use cases** we should consider
+- **Contributions** to documentation and specification
+- **Discussion** about implementation approaches
+
+Open an [issue](https://github.com/oojacoboo/intent-flow/issues) or start a [discussion](https://github.com/oojacoboo/intent-flow/discussions).
+
+---
+
+## Quick Comparison
+
+```
+┌────────────────────┬────────────────────┬────────────────────┐
+│   TRADITIONAL      │   CHATBOT          │   INTENTFLOW       │
+├────────────────────┼────────────────────┼────────────────────┤
+│                    │                    │                    │
+│   User taps        │   User types       │   User types       │
+│   Menu → Drinks    │   "order coffee"   │   "order coffee"   │
+│   → Lattes → ...   │        │           │        │           │
+│        │           │        ▼           │        ▼           │
+│        ▼           │   AI generates     │   AI selects       │
+│   Finally finds    │   text response    │   order.place Flow │
+│   the order form   │        │           │        │           │
+│        │           │        ▼           │        ▼           │
+│        ▼           │   "I can help      │   ┌──────────┐     │
+│   ┌──────────┐     │    you order a     │   │ Order    │     │
+│   │ Order    │     │    coffee! What    │   │ ──────── │     │
+│   │ ──────── │     │    size?"          │   │ Latte    │     │
+│   │ Latte    │     │                    │   │ Large    │     │
+│   │ Large    │     │   (no UI, just     │   │ $4.50    │     │
+│   │ $4.50    │     │    back & forth)   │   │          │     │
+│   │          │     │                    │   │ [Order]  │     │
+│   │ [Order]  │     │                    │   └──────────┘     │
+│   └──────────┘     │                    │                    │
+│                    │                    │                    │
+│   Real UI ✓        │   No actions ✗     │   Real UI ✓        │
+│   Rigid nav ✗      │   Flexible ✓       │   Flexible ✓       │
+│   Your design ✓    │   Generic ✗        │   Your design ✓    │
+│                    │                    │                    │
+└────────────────────┴────────────────────┴────────────────────┘
+```
+
+---
+
+<p align="center">
+  <strong>IntentFlow</strong> — The protocol for AI-orchestrated applications.
+  <br/>
+  <a href="./docs">Documentation</a> · <a href="https://github.com/oojacoboo/intent-flow/issues">Issues</a> · <a href="https://github.com/oojacoboo/intent-flow/discussions">Discussions</a>
+</p>
 
 ---
 
