@@ -606,4 +606,4 @@ Building a Flow involves:
 7. **Connect** to intent matching
 8. **Test** at each layer
 
-Each Flow is self-contained and portable—it works anywhere the IntentFlow protocol is spoken.
+Each Flow is self-contained and portable—it works anywhere IntentFlow is deployed, communicating via AG-UI events and rendering with A2UI-compatible components.

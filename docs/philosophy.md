@@ -42,14 +42,17 @@ The AI layer is powerful but bounded. It has access to a **Flow Registry** that 
 
 This isn't a limitation—it's what makes the system trustworthy for business applications.
 
-### 3. Protocol Over Implementation
+### 3. Standards Over Reinvention
 
-The server and client communicate through a strict JSON protocol. The server emits **instructions** (render this Flow with these props). The client interprets those instructions using its local component library.
+IntentFlow builds on established protocols rather than inventing new ones:
+
+- **[AG-UI](https://docs.ag-ui.com)** — The Agent-User Interaction Protocol handles runtime communication between agents and frontends (event streaming, state synchronization, bidirectional messaging)
+- **[A2UI](https://github.com/nickarls/A2UI)** — The Agent-to-User Interface format provides a declarative JSON structure for UI components
 
 This separation means:
 - Business logic stays on the server (update without app releases)
 - UI stays on the client (native performance, platform-appropriate rendering)
-- The protocol bridges them (stable contract, versionable)
+- The protocols bridge them (stable contract, widely adopted)
 
 ### 4. Universal by Default
 
@@ -62,8 +65,10 @@ Write once, render everywhere—not through lowest-common-denominator components
 
 ## What IntentFlow Is Not
 
+- **Not a wire protocol.** It uses [AG-UI](https://docs.ag-ui.com) for agent↔frontend communication.
+- **Not a UI format.** It uses [A2UI](https://github.com/nickarls/A2UI) for declarative UI components.
 - **Not a UI component library.** You bring your own components (though we provide patterns).
 - **Not an AI model.** You bring your own LLM (Claude, GPT, local models).
 - **Not a backend framework.** You bring your own API (GraphQL recommended, REST supported).
 
-IntentFlow is the **orchestration layer**—the protocol and patterns that connect AI intent recognition to type-safe UI rendering.
+IntentFlow is the **orchestration layer**—the Flows, schemas, state machines, and registry that connect AI intent recognition to type-safe UI rendering. It sits on top of AG-UI and A2UI, adding the structure needed for constrained, predictable AI-driven applications.

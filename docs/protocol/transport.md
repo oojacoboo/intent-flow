@@ -1,80 +1,86 @@
 # Transport
 
-The IntentFlow Protocol is transport-agnostic. This document describes implementation patterns for common transport mechanisms.
+IntentFlow uses [AG-UI](https://docs.ag-ui.com) for its runtime protocol, which supports multiple transports. This document describes how IntentFlow works with each AG-UI transport option.
 
-## Transport Options
+## AG-UI Transport Options
+
+AG-UI supports these transports (IntentFlow inherits all of them):
 
 | Transport | Best For | Characteristics |
 |-----------|----------|-----------------|
-| HTTP | Simple interactions, MCP | Request-response, stateless |
-| WebSocket | Real-time apps | Bidirectional, persistent |
-| SSE | Server-push updates | Unidirectional, streaming |
-| HTTP + Polling | Fallback | Compatibility, higher latency |
+| HTTP + SSE | Most applications | Streaming server events, HTTP for client messages |
+| WebSocket | Real-time apps | Full bidirectional, persistent connection |
+| MCP | AI agent integration | Model Context Protocol for Claude/ChatGPT |
 
-## HTTP Transport
+See the [AG-UI Transport documentation](https://docs.ag-ui.com/concepts/streaming) for full details.
 
-Suitable for request-response patterns and MCP integrations.
+## HTTP + SSE Transport
 
-### Endpoints
+The recommended transport for most IntentFlow applications.
+
+### AG-UI HTTP Pattern
+
+AG-UI uses HTTP POST for client→server and SSE for server→client:
 
 ```
-POST /api/intent/prompt     # User prompt → RENDER
-POST /api/intent/event      # Flow event → TRANSITION
-GET  /api/intent/instance   # Get instance state
-DELETE /api/intent/instance # Dismiss request
+POST /api/agent/run         # Start agent run (AG-UI)
+GET  /api/agent/events      # SSE stream for events (AG-UI)
+POST /api/intent/event      # IntentFlow custom events
 ```
 
-### Prompt → Render
+### Starting a Run
 
 ```typescript
-// Request
-POST /api/intent/prompt
+// Client sends prompt via AG-UI
+POST /api/agent/run
 Content-Type: application/json
 
 {
-  "sessionId": "session_123",
-  "text": "I want to order a large cappuccino"
+  "threadId": "thread_123",
+  "input": "I want to order a large cappuccino"
 }
 
-// Response
+// Server returns run ID
 HTTP/1.1 200 OK
 Content-Type: application/json
 
 {
-  "type": "RENDER",
-  "messageId": "msg_001",
-  "intentId": "order.place",
-  "instanceId": "flow_abc123",
-  "props": { ... },
-  "displayMode": "fullscreen"
+  "runId": "run_456"
 }
+
+// Client connects to SSE stream
+GET /api/agent/events?runId=run_456
+Accept: text/event-stream
 ```
 
-### Event → Transition
+### Receiving IntentFlow Events
+
+Events arrive via the SSE stream:
+
+```
+event: custom
+data: {"type":"CUSTOM","name":"intentflow.render","value":{"intentId":"order.place","instanceId":"flow_abc123","props":{...}}}
+
+event: custom
+data: {"type":"CUSTOM","name":"intentflow.transition","value":{"instanceId":"flow_abc123","toState":"confirmed"}}
+```
+
+### Sending Flow Events
 
 ```typescript
-// Request
+// Client sends IntentFlow event
 POST /api/intent/event
 Content-Type: application/json
 
 {
-  "sessionId": "session_123",
+  "runId": "run_456",
   "instanceId": "flow_abc123",
   "event": "CONFIRM",
   "payload": { "selectedPaymentId": "pm_001" }
 }
 
-// Response (synchronous mutation)
+// Server acknowledges
 HTTP/1.1 200 OK
-Content-Type: application/json
-
-{
-  "type": "TRANSITION",
-  "messageId": "msg_002",
-  "instanceId": "flow_abc123",
-  "toState": "confirmed",
-  "context": { "orderId": "order_789" }
-}
 ```
 
 ### Async Operations
@@ -115,43 +121,41 @@ Authorization: Bearer <token>
 
 ## WebSocket Transport
 
-Preferred for interactive applications with real-time updates.
+Preferred for interactive applications with real-time updates. Uses AG-UI's WebSocket protocol.
 
 ### Connection Lifecycle
 
 ```typescript
-// 1. Connect
-const ws = new WebSocket('wss://api.example.com/intent/ws')
+// 1. Connect to AG-UI WebSocket endpoint
+const ws = new WebSocket('wss://api.example.com/agent/ws')
 
-// 2. Handshake
+// 2. AG-UI handshake
 ws.onopen = () => {
   ws.send(JSON.stringify({
-    type: 'HANDSHAKE',
-    sessionId: 'session_123',
-    supportedVersions: ['1.0'],
+    type: 'connect',
+    threadId: 'thread_123',
     auth: { token: 'Bearer ...' }
   }))
 }
 
-// 3. Receive handshake acknowledgment
+// 3. Receive connection acknowledgment
 ws.onmessage = (event) => {
   const message = JSON.parse(event.data)
-  if (message.type === 'HANDSHAKE_ACK') {
-    // Connection established
-    console.log('Connected, version:', message.selectedVersion)
+  if (message.type === 'connected') {
+    console.log('Connected to AG-UI')
   }
 }
 
-// 4. Exchange messages
-function sendEvent(instanceId: string, event: string, payload?: object) {
+// 4. Send IntentFlow events
+function sendFlowEvent(instanceId: string, event: string, payload?: object) {
   ws.send(JSON.stringify({
-    type: 'EVENT',
-    messageId: generateId(),
-    timestamp: new Date().toISOString(),
-    version: '1.0',
-    instanceId,
-    event,
-    payload
+    type: 'CUSTOM',
+    name: 'intentflow.event',
+    value: {
+      instanceId,
+      event,
+      payload
+    }
   }))
 }
 ```
@@ -343,9 +347,11 @@ eventSource.addEventListener('transition', (event) => {
 
 ## MCP Transport
 
-For Model Context Protocol integrations (Claude, etc.).
+For Model Context Protocol integrations (Claude, ChatGPT, etc.). MCP is one of AG-UI's supported transports.
 
 ### Tool Registration
+
+IntentFlow exposes Flows as MCP tools:
 
 ```typescript
 // MCP Server exposes Flows as tools
@@ -357,7 +363,7 @@ const server = new McpServer({
 // Register each Flow as a tool
 for (const flow of registry.getFlows()) {
   server.tool(
-    flow.intentId,
+    flow.intentId.replace('.', '_'),  // MCP tool names can't have dots
     flow.meta.description,
     zodToJsonSchema(flow.extractionSchema),
     async (params) => {
@@ -450,28 +456,26 @@ server.tool('order.confirm', 'Confirm pending order', {}, async () => {
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
 │  Building a native/web app?                                 │
-│    ├── Need real-time updates? ───► WebSocket              │
-│    └── Simple interactions? ──────► HTTP                   │
+│    ├── Need real-time updates? ───► WebSocket (AG-UI)      │
+│    └── Standard interactions? ────► HTTP + SSE (AG-UI)     │
 │                                                             │
 │  Building an MCP integration?                               │
-│    └── Always ────────────────────► MCP (stateless HTTP)   │
+│    └── AI agent tools ────────────► MCP (AG-UI adapter)    │
 │                                                             │
-│  Building a dashboard/monitoring UI?                        │
-│    └── Server-push only? ─────────► SSE                    │
-│                                                             │
-│  Need fallback for restricted networks?                     │
-│    └── HTTP + Polling                                       │
+│  Need maximum compatibility?                                │
+│    └── HTTP + SSE (AG-UI default)                          │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ## Security by Transport
 
-| Transport | Auth Mechanism | Considerations |
-|-----------|---------------|----------------|
-| HTTP | Bearer token in header | Standard REST security |
-| WebSocket | Token in handshake | Validate on connect, not per-message |
-| SSE | Token in query param or cookie | Query params may be logged |
-| MCP | Host-provided auth | Depends on MCP host implementation |
+AG-UI handles transport security. IntentFlow adds Flow-level authorization:
 
-All transports should use TLS in production.
+| Transport | Auth Mechanism | IntentFlow Considerations |
+|-----------|---------------|---------------------------|
+| HTTP + SSE | Bearer token in header | Validate per-request |
+| WebSocket | Token in handshake | Validate on connect |
+| MCP | Host-provided auth | Validate tool call permissions |
+
+All transports should use TLS in production. See the [AG-UI security documentation](https://docs.ag-ui.com) for transport-layer security details.

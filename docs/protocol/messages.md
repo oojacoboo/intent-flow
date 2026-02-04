@@ -1,20 +1,42 @@
 # Protocol Messages
 
-This document specifies all message types in the IntentFlow Protocol.
+IntentFlow uses [AG-UI Protocol](https://docs.ag-ui.com) events as its transport layer. This document specifies the IntentFlow-specific events sent via AG-UI's `CUSTOM` event type.
 
-## Server → Client Messages
+## AG-UI Base Events
 
-### RENDER
+IntentFlow relies on these standard AG-UI events:
+
+| Event | Direction | Purpose |
+|-------|-----------|---------|
+| `RUN_STARTED` | Server → Client | Agent run begins |
+| `RUN_FINISHED` | Server → Client | Agent run completes |
+| `RUN_ERROR` | Server → Client | Agent run failed |
+| `STATE_SNAPSHOT` | Server → Client | Full state sync |
+| `STATE_DELTA` | Server → Client | Incremental state update |
+
+See the [AG-UI documentation](https://docs.ag-ui.com) for full event specifications.
+
+## IntentFlow Custom Events
+
+IntentFlow extends AG-UI with custom events for Flow management:
+
+```typescript
+// All IntentFlow events use AG-UI's CUSTOM type
+interface IntentFlowEvent {
+  type: 'CUSTOM'
+  name: string        // e.g., 'intentflow.render'
+  value: unknown      // IntentFlow-specific payload
+}
+```
+
+## Server → Client Events
+
+### intentflow.render
 
 Instructs the client to display a Flow.
 
 ```typescript
-interface RenderMessage {
-  type: 'RENDER'
-  messageId: string
-  timestamp: string
-  version: '1.0'
-
+interface RenderPayload {
   // Flow identification
   intentId: string          // e.g., "order.place"
   instanceId: string        // Unique instance ID, e.g., "flow_abc123"
@@ -32,7 +54,7 @@ interface RenderMessage {
   parentInstanceId?: string       // If this is a nested/child Flow
 
   // Options
-  streaming?: boolean             // Expect PROPS_UPDATE messages
+  streaming?: boolean             // Expect props_update events
   dismissable?: boolean           // User can dismiss without completing (default: true)
 }
 ```
@@ -41,47 +63,42 @@ interface RenderMessage {
 
 ```json
 {
-  "type": "RENDER",
-  "messageId": "msg_001",
-  "timestamp": "2025-01-15T10:30:00Z",
-  "version": "1.0",
-  "intentId": "order.place",
-  "instanceId": "flow_abc123",
-  "props": {
-    "items": [
-      {
-        "item": { "id": "item_001", "name": "Cappuccino", "price": 4.50 },
-        "quantity": 1,
-        "selectedOptions": { "size": "large", "milk": "oat" }
-      }
-    ],
-    "location": {
-      "id": "loc_001",
-      "name": "123 Main Street",
-      "estimatedTime": 8
+  "type": "CUSTOM",
+  "name": "intentflow.render",
+  "value": {
+    "intentId": "order.place",
+    "instanceId": "flow_abc123",
+    "props": {
+      "items": [
+        {
+          "item": { "id": "item_001", "name": "Cappuccino", "price": 4.50 },
+          "quantity": 1,
+          "selectedOptions": { "size": "large", "milk": "oat" }
+        }
+      ],
+      "location": {
+        "id": "loc_001",
+        "name": "123 Main Street",
+        "estimatedTime": 8
+      },
+      "paymentMethods": [
+        { "id": "pm_001", "label": "Visa ••4242", "type": "card" }
+      ]
     },
-    "paymentMethods": [
-      { "id": "pm_001", "label": "Visa ••4242", "type": "card" }
-    ]
-  },
-  "displayMode": "fullscreen",
-  "dismissable": true
+    "displayMode": "fullscreen",
+    "dismissable": true
+  }
 }
 ```
 
 ---
 
-### TRANSITION
+### intentflow.transition
 
 Updates the state of an active Flow.
 
 ```typescript
-interface TransitionMessage {
-  type: 'TRANSITION'
-  messageId: string
-  timestamp: string
-  version: '1.0'
-
+interface TransitionPayload {
   // Target Flow
   instanceId: string
 
@@ -101,41 +118,36 @@ interface TransitionMessage {
 
 ```json
 {
-  "type": "TRANSITION",
-  "messageId": "msg_002",
-  "timestamp": "2025-01-15T10:30:05Z",
-  "version": "1.0",
-  "instanceId": "flow_abc123",
-  "toState": "confirmed",
-  "context": {
-    "orderId": "order_789",
-    "confirmationNumber": "CF-12345"
-  },
-  "followUp": {
-    "intentId": "order.track",
-    "props": { "orderId": "order_789" }
+  "type": "CUSTOM",
+  "name": "intentflow.transition",
+  "value": {
+    "instanceId": "flow_abc123",
+    "toState": "confirmed",
+    "context": {
+      "orderId": "order_789",
+      "confirmationNumber": "CF-12345"
+    },
+    "followUp": {
+      "intentId": "order.track",
+      "props": { "orderId": "order_789" }
+    }
   }
 }
 ```
 
 ---
 
-### PROPS_UPDATE
+### intentflow.props_update
 
 Patches props of an active Flow (for streaming/real-time updates).
 
 ```typescript
-interface PropsUpdateMessage {
-  type: 'PROPS_UPDATE'
-  messageId: string
-  timestamp: string
-  version: '1.0'
-
+interface PropsUpdatePayload {
   // Target Flow
   instanceId: string
 
   // Props changes (shallow merge)
-  patch: Record<string, unknown>
+  patch?: Record<string, unknown>
 
   // Or deep patch operations
   operations?: PatchOperation[]
@@ -152,14 +164,14 @@ interface PatchOperation {
 
 ```json
 {
-  "type": "PROPS_UPDATE",
-  "messageId": "msg_003",
-  "timestamp": "2025-01-15T10:30:10Z",
-  "version": "1.0",
-  "instanceId": "flow_track123",
-  "patch": {
-    "status": "ready",
-    "estimatedTime": 0
+  "type": "CUSTOM",
+  "name": "intentflow.props_update",
+  "value": {
+    "instanceId": "flow_track123",
+    "patch": {
+      "status": "ready",
+      "estimatedTime": 0
+    }
   }
 }
 ```
@@ -168,31 +180,26 @@ interface PatchOperation {
 
 ```json
 {
-  "type": "PROPS_UPDATE",
-  "messageId": "msg_004",
-  "timestamp": "2025-01-15T10:30:15Z",
-  "version": "1.0",
-  "instanceId": "flow_abc123",
-  "operations": [
-    { "op": "set", "path": "items[0].quantity", "value": 2 },
-    { "op": "append", "path": "items", "value": { "item": {...}, "quantity": 1 } }
-  ]
+  "type": "CUSTOM",
+  "name": "intentflow.props_update",
+  "value": {
+    "instanceId": "flow_abc123",
+    "operations": [
+      { "op": "set", "path": "items[0].quantity", "value": 2 },
+      { "op": "append", "path": "items", "value": { "item": {...}, "quantity": 1 } }
+    ]
+  }
 }
 ```
 
 ---
 
-### DISMISS
+### intentflow.dismiss
 
 Removes a Flow from display.
 
 ```typescript
-interface DismissMessage {
-  type: 'DISMISS'
-  messageId: string
-  timestamp: string
-  version: '1.0'
-
+interface DismissPayload {
   // Target Flow
   instanceId: string
 
@@ -208,39 +215,33 @@ interface DismissMessage {
 
 ```json
 {
-  "type": "DISMISS",
-  "messageId": "msg_005",
-  "timestamp": "2025-01-15T10:30:20Z",
-  "version": "1.0",
-  "instanceId": "flow_abc123",
-  "reason": "completed",
-  "result": {
-    "orderId": "order_789",
-    "total": 5.25
+  "type": "CUSTOM",
+  "name": "intentflow.dismiss",
+  "value": {
+    "instanceId": "flow_abc123",
+    "reason": "completed",
+    "result": {
+      "orderId": "order_789",
+      "total": 5.25
+    }
   }
 }
 ```
 
 ---
 
-### ERROR
+### intentflow.error
 
-Reports an error condition.
+Reports an IntentFlow-specific error. For general agent errors, use AG-UI's `RUN_ERROR` event.
 
 ```typescript
-interface ErrorMessage {
-  type: 'ERROR'
-  messageId: string
-  timestamp: string
-  version: '1.0'
-
+interface ErrorPayload {
   // Error identification
   code: ErrorCode
   message: string         // Human-readable description
 
   // Context
   instanceId?: string     // Related Flow, if any
-  inReplyTo?: string      // Message that caused the error
 
   // Details
   details?: Record<string, unknown>
@@ -251,7 +252,6 @@ interface ErrorMessage {
 }
 
 type ErrorCode =
-  | 'INVALID_MESSAGE'
   | 'INVALID_PROPS'
   | 'INVALID_TRANSITION'
   | 'FLOW_NOT_FOUND'
@@ -259,43 +259,35 @@ type ErrorCode =
   | 'PERMISSION_DENIED'
   | 'HYDRATION_FAILED'
   | 'MUTATION_FAILED'
-  | 'TIMEOUT'
-  | 'INTERNAL_ERROR'
 ```
 
 **Example:**
 
 ```json
 {
-  "type": "ERROR",
-  "messageId": "msg_006",
-  "timestamp": "2025-01-15T10:30:25Z",
-  "version": "1.0",
-  "code": "MUTATION_FAILED",
-  "message": "Payment declined by processor",
-  "instanceId": "flow_abc123",
-  "inReplyTo": "msg_client_005",
-  "details": {
-    "processorCode": "insufficient_funds",
-    "processorMessage": "Card declined"
-  },
-  "recoverable": true
+  "type": "CUSTOM",
+  "name": "intentflow.error",
+  "value": {
+    "code": "MUTATION_FAILED",
+    "message": "Payment declined by processor",
+    "instanceId": "flow_abc123",
+    "details": {
+      "processorCode": "insufficient_funds",
+      "processorMessage": "Card declined"
+    },
+    "recoverable": true
+  }
 }
 ```
 
 ---
 
-### ACTION
+### intentflow.action
 
 Requests the client perform a platform capability.
 
 ```typescript
-interface ActionMessage {
-  type: 'ACTION'
-  messageId: string
-  timestamp: string
-  version: '1.0'
-
+interface ActionPayload {
   // Action type
   action: ActionType
   config: Record<string, unknown>
@@ -322,71 +314,44 @@ type ActionType =
 
 ```json
 {
-  "type": "ACTION",
-  "messageId": "msg_007",
-  "timestamp": "2025-01-15T10:30:30Z",
-  "version": "1.0",
-  "action": "biometric_auth",
-  "config": {
-    "reason": "Authorize payment of $5.25",
-    "fallback": "passcode"
-  },
-  "instanceId": "flow_abc123",
-  "responseRequired": true
+  "type": "CUSTOM",
+  "name": "intentflow.action",
+  "value": {
+    "action": "biometric_auth",
+    "config": {
+      "reason": "Authorize payment of $5.25",
+      "fallback": "passcode"
+    },
+    "instanceId": "flow_abc123",
+    "responseRequired": true
+  }
 }
 ```
 
 ---
 
-### TEXT
+### Text Messages
 
-Sends a plain text message (for conversational context).
-
-```typescript
-interface TextMessage {
-  type: 'TEXT'
-  messageId: string
-  timestamp: string
-  version: '1.0'
-
-  // Content
-  content: string
-  format?: 'plain' | 'markdown'
-
-  // Presentation
-  role: 'assistant' | 'system'
-}
-```
-
-**Example:**
+For conversational text, use AG-UI's `TEXT_MESSAGE_CONTENT` event:
 
 ```json
 {
-  "type": "TEXT",
+  "type": "TEXT_MESSAGE_CONTENT",
   "messageId": "msg_008",
-  "timestamp": "2025-01-15T10:30:35Z",
-  "version": "1.0",
-  "content": "I've placed your order for a large oat milk cappuccino. It'll be ready in about 8 minutes.",
-  "format": "plain",
-  "role": "assistant"
+  "delta": "I've placed your order for a large oat milk cappuccino."
 }
 ```
 
 ---
 
-## Client → Server Messages
+## Client → Server Events
 
-### EVENT
+### intentflow.event
 
 Reports a user interaction or state machine event.
 
 ```typescript
-interface EventMessage {
-  type: 'EVENT'
-  messageId: string
-  timestamp: string
-  version: '1.0'
-
+interface EventPayload {
   // Target Flow
   instanceId: string
 
@@ -400,73 +365,35 @@ interface EventMessage {
 
 ```json
 {
-  "type": "EVENT",
-  "messageId": "msg_client_001",
-  "timestamp": "2025-01-15T10:30:40Z",
-  "version": "1.0",
-  "instanceId": "flow_abc123",
-  "event": "CONFIRM",
-  "payload": {
-    "selectedPaymentId": "pm_001",
-    "tip": 1.00
+  "type": "CUSTOM",
+  "name": "intentflow.event",
+  "value": {
+    "instanceId": "flow_abc123",
+    "event": "CONFIRM",
+    "payload": {
+      "selectedPaymentId": "pm_001",
+      "tip": 1.00
+    }
   }
 }
 ```
 
 ---
 
-### PROMPT
+### User Prompts
 
-Sends user natural language input.
-
-```typescript
-interface PromptMessage {
-  type: 'PROMPT'
-  messageId: string
-  timestamp: string
-  version: '1.0'
-
-  // User input
-  text: string
-
-  // Optional context
-  activeInstanceId?: string   // If prompt is in context of a Flow
-  attachments?: Attachment[]
-}
-
-interface Attachment {
-  type: 'image' | 'file' | 'location'
-  data: string | Record<string, unknown>
-}
-```
-
-**Example:**
-
-```json
-{
-  "type": "PROMPT",
-  "messageId": "msg_client_002",
-  "timestamp": "2025-01-15T10:30:45Z",
-  "version": "1.0",
-  "text": "Actually, make that a large with oat milk"
-}
-```
+For natural language input, use AG-UI's standard input handling. The AG-UI agent receives the prompt and IntentFlow's orchestration layer matches it to a Flow.
 
 ---
 
-### ACTION_RESPONSE
+### intentflow.action_response
 
-Returns result of an ACTION request.
+Returns result of an action request.
 
 ```typescript
-interface ActionResponseMessage {
-  type: 'ACTION_RESPONSE'
-  messageId: string
-  timestamp: string
-  version: '1.0'
-
+interface ActionResponsePayload {
   // Correlation
-  inReplyTo: string     // messageId of ACTION request
+  actionId: string     // ID from the action request
 
   // Result
   success: boolean
@@ -482,32 +409,27 @@ interface ActionResponseMessage {
 
 ```json
 {
-  "type": "ACTION_RESPONSE",
-  "messageId": "msg_client_003",
-  "timestamp": "2025-01-15T10:30:50Z",
-  "version": "1.0",
-  "inReplyTo": "msg_007",
-  "success": true,
-  "result": {
-    "authenticated": true,
-    "method": "face_id"
+  "type": "CUSTOM",
+  "name": "intentflow.action_response",
+  "value": {
+    "actionId": "action_007",
+    "success": true,
+    "result": {
+      "authenticated": true,
+      "method": "face_id"
+    }
   }
 }
 ```
 
 ---
 
-### DISMISS_REQUEST
+### intentflow.dismiss_request
 
 Client requests to dismiss a Flow.
 
 ```typescript
-interface DismissRequestMessage {
-  type: 'DISMISS_REQUEST'
-  messageId: string
-  timestamp: string
-  version: '1.0'
-
+interface DismissRequestPayload {
   // Target Flow
   instanceId: string
 
@@ -520,115 +442,89 @@ interface DismissRequestMessage {
 
 ```json
 {
-  "type": "DISMISS_REQUEST",
-  "messageId": "msg_client_004",
-  "timestamp": "2025-01-15T10:30:55Z",
-  "version": "1.0",
-  "instanceId": "flow_abc123",
-  "reason": "user_cancelled"
+  "type": "CUSTOM",
+  "name": "intentflow.dismiss_request",
+  "value": {
+    "instanceId": "flow_abc123",
+    "reason": "user_cancelled"
+  }
 }
 ```
 
 ---
 
-## Bidirectional Messages
+## State Synchronization
 
-### PING / PONG
+AG-UI provides state synchronization via `STATE_SNAPSHOT` and `STATE_DELTA` events. IntentFlow uses these for Flow instance state:
 
-Connection health check.
-
-```typescript
-interface PingMessage {
-  type: 'PING'
-  messageId: string
-  timestamp: string
-}
-
-interface PongMessage {
-  type: 'PONG'
-  messageId: string
-  timestamp: string
-  inReplyTo: string
+```json
+{
+  "type": "STATE_SNAPSHOT",
+  "snapshot": {
+    "activeFlows": {
+      "flow_abc123": {
+        "intentId": "order.place",
+        "state": "review",
+        "props": {...}
+      }
+    }
+  }
 }
 ```
 
 ---
 
-### SYNC
-
-Synchronizes session state (recovery after disconnect).
-
-```typescript
-interface SyncRequestMessage {
-  type: 'SYNC_REQUEST'
-  messageId: string
-  timestamp: string
-  version: '1.0'
-
-  // Client's known state
-  sessionId: string
-  knownInstances: Array<{
-    instanceId: string
-    lastMessageId: string
-  }>
-}
-
-interface SyncResponseMessage {
-  type: 'SYNC_RESPONSE'
-  messageId: string
-  timestamp: string
-  version: '1.0'
-
-  // Current state
-  activeInstances: FlowInstanceState[]
-  missedMessages: ProtocolMessage[]
-}
-```
-
----
-
-## Message Ordering
+## Event Ordering
 
 ### Sequence Guarantees
 
-1. Messages for a single `instanceId` are delivered in order
-2. Messages across different instances may interleave
-3. `inReplyTo` establishes causal relationships
+AG-UI provides ordering guarantees for events within a run. IntentFlow adds:
+
+1. Events for a single `instanceId` are delivered in order
+2. Events across different Flow instances may interleave
+3. State transitions are atomic per instance
 
 ### Idempotency
 
-Clients should handle duplicate messages gracefully:
+Clients should handle duplicate events gracefully:
 
 ```typescript
-const processedMessages = new Set<string>()
+const processedEvents = new Set<string>()
 
-function handleMessage(message: ProtocolMessage) {
-  if (processedMessages.has(message.messageId)) {
+function handleEvent(event: CustomEvent) {
+  const eventId = `${event.name}-${event.value.instanceId}-${Date.now()}`
+  if (processedEvents.has(eventId)) {
     return // Already processed
   }
-  processedMessages.add(message.messageId)
-  // Process message...
+  processedEvents.add(eventId)
+  // Process event...
 }
 ```
 
 ---
 
-## JSON Schema
+## Schema Validation
 
-Full JSON Schema definitions for all message types are available in the [reference documentation](../reference/protocol-schema.md).
+IntentFlow uses Zod schemas for type-safe validation of custom event payloads:
 
 ```typescript
 // Importing schemas for validation
 import {
-  renderMessageSchema,
-  transitionMessageSchema,
-  eventMessageSchema,
+  renderPayloadSchema,
+  transitionPayloadSchema,
+  eventPayloadSchema,
   // ...
-} from '@intentflow/protocol'
+} from '@intentflow/core'
 
-// Validate incoming message
-const result = eventMessageSchema.safeParse(rawMessage)
-if (!result.success) {
-  throw new ProtocolError('INVALID_MESSAGE', result.error)
+// Validate incoming IntentFlow custom event
+function handleCustomEvent(event: AGUICustomEvent) {
+  if (event.name === 'intentflow.render') {
+    const result = renderPayloadSchema.safeParse(event.value)
+    if (!result.success) {
+      throw new FlowError('INVALID_PAYLOAD', result.error)
+    }
+    return handleRender(result.data)
+  }
+  // ... handle other event types
 }
 ```

@@ -290,31 +290,34 @@ The schema ensures props are complete and correctly typed before rendering.
 
 ### Render
 
-The server emits a protocol instruction:
+The server emits an AG-UI event with the IntentFlow render payload:
 
 ```json
 {
-  "type": "RENDER",
-  "intentId": "order.place",
-  "instanceId": "flow_abc123",
-  "props": {
-    "items": [{
-      "item": { "id": "item_123", "name": "Cappuccino", "price": 4.50 },
-      "quantity": 1
-    }],
-    "location": {
-      "id": "loc_456",
-      "name": "123 Main St",
-      "estimatedTime": 8
-    },
-    "paymentMethods": [
-      { "id": "pm_789", "label": "Visa ••4242", "type": "card" }
-    ]
+  "type": "CUSTOM",
+  "name": "intentflow.render",
+  "value": {
+    "intentId": "order.place",
+    "instanceId": "flow_abc123",
+    "props": {
+      "items": [{
+        "item": { "id": "item_123", "name": "Cappuccino", "price": 4.50 },
+        "quantity": 1
+      }],
+      "location": {
+        "id": "loc_456",
+        "name": "123 Main St",
+        "estimatedTime": 8
+      },
+      "paymentMethods": [
+        { "id": "pm_789", "label": "Visa ••4242", "type": "card" }
+      ]
+    }
   }
 }
 ```
 
-The client looks up `order.place` in its component registry and renders the corresponding component with the provided props.
+The client receives the AG-UI event, looks up `order.place` in its component registry, and renders the corresponding component with the provided props.
 
 ### Interact
 
@@ -328,20 +331,23 @@ dispatch('CONFIRM')
 // Client re-renders to show processing state
 ```
 
-For events that require server involvement (like submitting the order), the client sends an event to the server:
+For events that require server involvement (like submitting the order), the client sends an AG-UI event to the server:
 
 ```json
 {
-  "type": "EVENT",
-  "instanceId": "flow_abc123",
-  "event": "CONFIRM",
-  "payload": {
-    "selectedPaymentId": "pm_789"
+  "type": "CUSTOM",
+  "name": "intentflow.event",
+  "value": {
+    "instanceId": "flow_abc123",
+    "event": "CONFIRM",
+    "payload": {
+      "selectedPaymentId": "pm_789"
+    }
   }
 }
 ```
 
-The server processes the event, executes the order mutation, and responds with the next state.
+The server processes the event, executes the order mutation, and responds with a transition event.
 
 ### Complete
 

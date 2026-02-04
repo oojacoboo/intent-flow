@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-IntentFlow is a framework specification for **Intent-Driven Architecture** - a protocol that allows AI agents to orchestrate applications by mapping natural language intents to pre-defined UI flows.
+IntentFlow is a framework specification for **Intent-Driven Architecture** - a framework that allows AI agents to orchestrate applications by mapping natural language intents to pre-defined UI Flows.
+
+**Built On:** IntentFlow uses [AG-UI](https://docs.ag-ui.com) (Agent-User Interaction Protocol) for runtime communication and [A2UI](https://github.com/nickarls/A2UI) for declarative UI format.
 
 **Current State:** Specification/documentation phase. See `/docs` for comprehensive documentation.
 
@@ -38,28 +40,36 @@ A Flow is a portable unit of functionality that encapsulates:
 2. **State Machine** (XState) - Valid states and transitions
 3. **Component** (React) - Platform-specific UI
 
-### Three-Layer Architecture
+### Protocol Stack
+
+```
+IntentFlow (Flows, Schemas, State Machines, Registry)
+    ↓
+AG-UI (Agent↔User runtime protocol)
+    ↓
+A2UI (Declarative UI format)
+    ↓
+Transport (MCP / A2A / HTTP)
+```
 
 | Layer | Role | Implementation |
 |-------|------|----------------|
-| **Brain (Server)** | Orchestration | AI matching, hydration, state management |
-| **Protocol (Wire)** | Transport | JSON messages (RENDER, TRANSITION, EVENT, etc.) |
-| **Body (Client)** | Rendering | React Native, React DOM, or MCP HTML |
+| **IntentFlow** | Flow orchestration | Schemas (Zod), state machines (XState), registry |
+| **AG-UI** | Runtime protocol | Event streaming, state sync, bidirectional communication |
+| **A2UI** | UI format | Declarative JSON → native components |
+| **Transport** | Wire protocol | MCP, HTTP, WebSocket, SSE |
 
-### Protocol Message Example
-```json
-{
-  "type": "RENDER",
-  "intentId": "order.place",
-  "instanceId": "flow_abc123",
-  "props": { ... },
-  "displayMode": "fullscreen"
-}
-```
+### What IntentFlow Adds
+
+IntentFlow extends AG-UI/A2UI with:
+- **Flows** - Self-contained units bundling schema + state machine + component
+- **Registry** - Catalog of available Flows that constrains AI
+- **Hydration** - Data fetching layer to populate Flow props
+- **Intent Matching** - Natural language → Flow selection
 
 ## Design Principles
 
 - **Constrained AI** - Agent limited to Flows in the Registry
 - **Platform Agnostic** - One Flow renders on mobile, web, and MCP
-- **Protocol Over Implementation** - Strict contract, flexible clients
+- **Standards-Based** - Built on AG-UI and A2UI protocols
 - **Flows Not Pages** - Capabilities invoked by intent, not navigation

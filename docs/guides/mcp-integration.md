@@ -2,6 +2,8 @@
 
 This guide covers exposing IntentFlow Flows as MCP (Model Context Protocol) tools, enabling AI assistants like Claude to invoke your application's capabilities.
 
+MCP is one of the transport options supported by [AG-UI](https://docs.ag-ui.com), which IntentFlow uses for agent↔frontend communication.
+
 ## Overview
 
 MCP allows external AI agents to interact with your IntentFlow application. Each Flow becomes a tool that Claude, ChatGPT, or other MCP-compatible clients can invoke.

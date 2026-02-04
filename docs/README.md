@@ -1,6 +1,6 @@
 # IntentFlow Documentation
 
-IntentFlow is a protocol and framework for building AI-orchestrated applications. It connects natural language understanding to type-safe UI rendering through a declarative JSON protocol.
+IntentFlow is a framework for building AI-orchestrated applications. It connects natural language understanding to type-safe UI rendering, built on top of the [AG-UI Protocol](https://docs.ag-ui.com) (for agent↔frontend communication) and [A2UI](https://github.com/nickarls/A2UI) (for declarative UI format).
 
 ## Quick Navigation
 
@@ -31,6 +31,25 @@ IntentFlow is a protocol and framework for building AI-orchestrated applications
 
 ## Architecture Overview
 
+### Protocol Stack
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         INTENTFLOW                              │
+│           Flows, Schemas (Zod), State Machines (XState)         │
+├─────────────────────────────────────────────────────────────────┤
+│                            AG-UI                                │
+│           Agent↔User runtime protocol (events, streaming)       │
+├─────────────────────────────────────────────────────────────────┤
+│                            A2UI                                 │
+│           Declarative UI format (JSON → components)             │
+├─────────────────────────────────────────────────────────────────┤
+│                    TRANSPORT (MCP / HTTP)                       │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Data Flow
+
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                          USER INPUT                             │
@@ -49,11 +68,11 @@ IntentFlow is a protocol and framework for building AI-orchestrated applications
 ┌─────────────────────────────────────────────────────────────────┐
 │                         SERVER                                  │
 │                                                                 │
-│  Registry ──► Hydration ──► State Machine ──► Protocol Message  │
+│  Registry ──► Hydration ──► State Machine ──► AG-UI Events      │
 │                                                                 │
 └───────────────────────────────┬─────────────────────────────────┘
                                 │
-                          JSON Protocol
+                          AG-UI Protocol
                                 │
                                 ▼
 ┌─────────────────────────────────────────────────────────────────┐
@@ -74,8 +93,9 @@ IntentFlow is a protocol and framework for building AI-orchestrated applications
 |---------|-------------|
 | **Flow** | A self-contained unit of functionality with schema, state machine, and UI |
 | **Intent** | The mapping from natural language to a specific Flow |
-| **Registry** | The catalog of all available Flows |
-| **Protocol** | The JSON message format between server and clients |
+| **Registry** | The catalog of all available Flows (constrains AI) |
+| **AG-UI** | The runtime protocol for agent↔frontend communication |
+| **A2UI** | The declarative format for UI components |
 | **Hydration** | The process of fetching data to populate Flow props |
 
 ## Design Principles
@@ -122,18 +142,21 @@ export const trackOrderFlow = defineFlow({
 ```
 
 ```typescript
-// Protocol message
+// AG-UI event with IntentFlow custom payload
 {
-  "type": "RENDER",
-  "intentId": "order.track",
-  "instanceId": "flow_123",
-  "props": {
-    "orderId": "order_789",
-    "status": "preparing",
-    "items": [{ "name": "Latte", "quantity": 1, "price": 4.50 }],
-    "estimatedReadyTime": "2025-01-15T10:30:00Z"
-  },
-  "displayMode": "fullscreen"
+  "type": "CUSTOM",
+  "name": "intentflow.render",
+  "value": {
+    "intentId": "order.track",
+    "instanceId": "flow_123",
+    "props": {
+      "orderId": "order_789",
+      "status": "preparing",
+      "items": [{ "name": "Latte", "quantity": 1, "price": 4.50 }],
+      "estimatedReadyTime": "2025-01-15T10:30:00Z"
+    },
+    "displayMode": "fullscreen"
+  }
 }
 ```
 

@@ -9,11 +9,11 @@ The AI orchestration layer sits between user input and Flow rendering:
 ```
 User Input → AI Orchestration → Flow Invocation → Rendering
      │              │                  │              │
-  "Order a      Intent Match      Hydration       Protocol
-   latte"       + Extraction      + Props         Message
+  "Order a      Intent Match      Hydration       AG-UI
+   latte"       + Extraction      + Props         Events
 ```
 
-IntentFlow is agnostic to your AI implementation. This guide shows common patterns.
+IntentFlow uses [AG-UI](https://docs.ag-ui.com) for agent↔frontend communication. The orchestration layer you build sits on top of AG-UI, matching intents to Flows. This guide shows common patterns.
 
 ## Architecture
 
@@ -35,9 +35,9 @@ interface PromptInput {
 }
 
 interface OrchestrationResult {
-  // What to render
-  render?: RenderInstruction
-  // Or text response
+  // What to render (sent as AG-UI CUSTOM event)
+  render?: IntentFlowRenderPayload
+  // Or text response (sent as AG-UI TEXT_MESSAGE_CONTENT)
   text?: string
   // Or request clarification
   clarification?: ClarificationRequest

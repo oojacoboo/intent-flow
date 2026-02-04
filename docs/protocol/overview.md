@@ -1,113 +1,152 @@
 # Protocol Overview
 
-The IntentFlow Protocol is the communication contract between the server (the "Brain") and clients (the "Body"). It defines how the server instructs clients to render Flows, how clients report user interactions, and how state synchronizes across the system.
+IntentFlow builds on the [AG-UI Protocol](https://docs.ag-ui.com) (Agent-User Interaction Protocol) for runtime communication between server and clients. This document describes how IntentFlow extends AG-UI with Flow-specific semantics.
+
+## Protocol Stack
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         INTENTFLOW                              │
+│        Flow orchestration, schemas, state machines, registry    │
+├─────────────────────────────────────────────────────────────────┤
+│                            AG-UI                                │
+│        Runtime protocol: events, streaming, state sync          │
+├─────────────────────────────────────────────────────────────────┤
+│                            A2UI                                 │
+│        Declarative UI format: JSON → components                 │
+├─────────────────────────────────────────────────────────────────┤
+│                    TRANSPORT (MCP / HTTP)                       │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+IntentFlow doesn't define its own wire protocol—it uses AG-UI for the runtime layer and A2UI for UI component format.
+
+## What AG-UI Provides
+
+AG-UI handles the fundamental agent↔frontend communication:
+
+- **Event streaming** — Server pushes events to client
+- **State synchronization** — Consistent state across agent runs
+- **Bidirectional messaging** — Client can send events back
+- **Run lifecycle** — Start, progress, completion semantics
+
+See the [AG-UI documentation](https://docs.ag-ui.com) for the full protocol specification.
+
+## What IntentFlow Adds
+
+IntentFlow extends AG-UI with Flow-specific concepts:
+
+| IntentFlow Concept | Built On |
+|-------------------|----------|
+| **Flow Registry** | Constrains what AG-UI agents can invoke |
+| **Intent Matching** | Routes user input to specific Flows |
+| **Hydration** | Populates Flow props before rendering |
+| **State Machines** | XState machines govern Flow transitions |
+| **Schemas** | Zod schemas validate Flow props |
 
 ## Design Principles
 
 ### 1. Declarative, Not Imperative
 
-The server declares **what** should be displayed, not **how** to display it.
+The server declares **what** should be displayed, not **how** to display it:
 
 ```json
-// Good: Declarative instruction
+// IntentFlow sends AG-UI CUSTOM events with declarative payloads
 {
-  "type": "RENDER",
-  "intentId": "order.place",
-  "props": { "items": [...] }
-}
-
-// Bad: Imperative commands
-{
-  "commands": [
-    { "action": "createElement", "tag": "div" },
-    { "action": "setText", "value": "Review Order" }
-  ]
+  "type": "CUSTOM",
+  "name": "intentflow.render",
+  "value": {
+    "intentId": "order.place",
+    "props": { "items": [...] }
+  }
 }
 ```
 
 The client owns rendering. The server owns logic.
 
-### 2. Minimal Surface Area
+### 2. AG-UI Events + IntentFlow Semantics
 
-The protocol has few message types with clear purposes. Complexity lives in props and context, not in protocol variations.
+IntentFlow uses AG-UI's `CUSTOM` event type for Flow-specific operations:
 
-Core message types:
-- `RENDER` — Display a Flow
-- `TRANSITION` — Update Flow state
-- `EVENT` — User interaction occurred
-- `DISMISS` — Remove a Flow
-- `ERROR` — Something went wrong
+- `intentflow.render` — Display a Flow
+- `intentflow.transition` — Update Flow state
+- `intentflow.props_update` — Patch props (streaming)
+- `intentflow.dismiss` — Remove a Flow
 
 ### 3. Stateless Messages, Stateful Sessions
 
-Each message is self-contained and interpretable without prior context. But messages reference session state via `instanceId` for continuity.
+AG-UI provides `threadId` and `runId` for session continuity. IntentFlow adds `instanceId` to track individual Flow instances within a session.
 
 ```json
 {
-  "type": "TRANSITION",
-  "instanceId": "flow_abc123",
-  "toState": "processing"
+  "type": "CUSTOM",
+  "name": "intentflow.transition",
+  "value": {
+    "instanceId": "flow_abc123",
+    "toState": "processing"
+  }
 }
 ```
 
-The client maintains local state per `instanceId`. The server is the source of truth for state transitions.
-
 ### 4. Schema-Validated
 
-All props conform to the Flow's declared schema. Invalid props are rejected before rendering:
+All props conform to the Flow's declared Zod schema. Invalid props are rejected before rendering:
 
 ```typescript
 // Server-side validation
 const validated = flow.schema.safeParse(props)
 if (!validated.success) {
-  throw new ProtocolError('INVALID_PROPS', validated.error)
+  throw new FlowError('INVALID_PROPS', validated.error)
 }
 ```
 
-### 5. Transport Agnostic
+### 5. Transport via AG-UI
 
-The protocol doesn't mandate a transport. Implementations can use:
-- **HTTP** — Request/response for simple interactions
-- **WebSocket** — Bidirectional for real-time updates
-- **SSE** — Server-push for streaming
-- **Message Queue** — For async/decoupled systems
+AG-UI supports multiple transports:
+- **HTTP + SSE** — Server-sent events for streaming
+- **WebSocket** — Bidirectional real-time
+- **MCP** — Model Context Protocol integration
 
-## Message Envelope
+IntentFlow inherits these transport options from AG-UI.
 
-All protocol messages share a common envelope:
+## Message Structure
+
+IntentFlow events are wrapped in AG-UI's event envelope:
 
 ```typescript
-interface ProtocolMessage {
-  // Message type discriminator
-  type: MessageType
+// AG-UI base event (from AG-UI protocol)
+interface BaseEvent {
+  type: string        // AG-UI event type
+  timestamp?: number  // Unix timestamp
+}
 
-  // Unique message ID for correlation
-  messageId: string
-
-  // Timestamp of message creation
-  timestamp: string // ISO 8601
-
-  // Protocol version
-  version: '1.0'
-
-  // Optional correlation to previous message
-  inReplyTo?: string
+// IntentFlow CUSTOM events add:
+interface IntentFlowEvent extends BaseEvent {
+  type: 'CUSTOM'
+  name: string        // e.g., 'intentflow.render'
+  value: unknown      // Flow-specific payload
 }
 ```
+
+The `value` field contains IntentFlow-specific data (props, state transitions, etc.).
 
 ## Session Model
 
-A **session** represents an ongoing conversation between user and system. Sessions contain:
+IntentFlow sessions map to AG-UI's thread and run concepts:
 
 ```typescript
-interface Session {
-  // Unique session identifier
-  sessionId: string
+// AG-UI provides thread/run semantics
+interface AGUIContext {
+  threadId: string    // Conversation thread (AG-UI)
+  runId: string       // Current agent run (AG-UI)
+}
 
+// IntentFlow adds Flow instance tracking
+interface IntentFlowSession extends AGUIContext {
   // User identity (if authenticated)
   userId?: string
 
-  // Active Flow instances
+  // Active Flow instances within this thread
   activeFlows: Map<InstanceId, FlowInstance>
 
   // Session-scoped context
@@ -115,9 +154,9 @@ interface Session {
 }
 
 interface FlowInstance {
-  instanceId: string
-  intentId: string
-  currentState: string
+  instanceId: string            // Unique Flow instance ID
+  intentId: string              // Flow type (e.g., 'order.place')
+  currentState: string          // XState machine state
   props: Record<string, unknown>
   context: Record<string, unknown>
   createdAt: string
@@ -125,7 +164,7 @@ interface FlowInstance {
 }
 ```
 
-Multiple Flows can be active simultaneously (e.g., a main Flow with a confirmation sub-Flow).
+Multiple Flows can be active simultaneously within a single AG-UI thread.
 
 ## Message Flow Patterns
 
@@ -138,40 +177,45 @@ Client                          Server
   │                               │
   │  ──── User Prompt ────────►   │
   │                               │
-  │  ◄──── RENDER ────────────    │
+  │  ◄──── RUN_STARTED ───────    │  (AG-UI)
+  │                               │
+  │  ◄──── CUSTOM ────────────    │  (intentflow.render)
   │       (order.place)           │
   │                               │
-  │  ──── EVENT (CONFIRM) ────►   │
+  │  ──── CUSTOM ─────────────►   │  (intentflow.event: CONFIRM)
   │                               │
-  │  ◄──── TRANSITION ────────    │
-  │       (→ processing)          │
+  │  ◄──── CUSTOM ────────────    │  (intentflow.transition → processing)
   │                               │
-  │  ◄──── TRANSITION ────────    │
-  │       (→ success)             │
+  │  ◄──── CUSTOM ────────────    │  (intentflow.transition → success)
   │                               │
-  │  ◄──── DISMISS ───────────    │
+  │  ◄──── CUSTOM ────────────    │  (intentflow.dismiss)
+  │                               │
+  │  ◄──── RUN_FINISHED ──────    │  (AG-UI)
   │                               │
 ```
 
 ### Pattern 2: Streaming Updates
 
-Flow receives real-time updates (e.g., order tracking).
+Flow receives real-time updates (e.g., order tracking). AG-UI's streaming capability enables this.
 
 ```
 Client                          Server
   │                               │
   │  ──── User Prompt ────────►   │
   │                               │
-  │  ◄──── RENDER ────────────    │
-  │       (order.track)           │
+  │  ◄──── RUN_STARTED ───────    │  (AG-UI)
   │                               │
-  │  ◄──── PROPS_UPDATE ──────    │  (status: preparing)
+  │  ◄──── CUSTOM ────────────    │  (intentflow.render: order.track)
   │                               │
-  │  ◄──── PROPS_UPDATE ──────    │  (status: ready)
+  │  ◄──── CUSTOM ────────────    │  (intentflow.props_update: preparing)
   │                               │
-  │  ──── EVENT (DISMISS) ────►   │
+  │  ◄──── CUSTOM ────────────    │  (intentflow.props_update: ready)
   │                               │
-  │  ◄──── DISMISS ───────────    │
+  │  ──── CUSTOM ─────────────►   │  (intentflow.event: DISMISS)
+  │                               │
+  │  ◄──── CUSTOM ────────────    │  (intentflow.dismiss)
+  │                               │
+  │  ◄──── RUN_FINISHED ──────    │  (AG-UI)
   │                               │
 ```
 
@@ -182,20 +226,20 @@ Parent Flow invokes child Flow for sub-task.
 ```
 Client                          Server
   │                               │
-  │  ◄──── RENDER ────────────    │  (order.place)
+  │  ◄──── CUSTOM ────────────    │  (intentflow.render: order.place)
   │       instanceId: flow_1      │
   │                               │
-  │  ──── EVENT (ADD_ITEM) ───►   │
+  │  ──── CUSTOM ─────────────►   │  (intentflow.event: ADD_ITEM)
   │                               │
-  │  ◄──── RENDER ────────────    │  (menu.browse)
+  │  ◄──── CUSTOM ────────────    │  (intentflow.render: menu.browse)
   │       instanceId: flow_2      │  parent: flow_1
   │       displayMode: modal      │
   │                               │
-  │  ──── EVENT (SELECT) ─────►   │  (on flow_2)
+  │  ──── CUSTOM ─────────────►   │  (intentflow.event: SELECT on flow_2)
   │                               │
-  │  ◄──── DISMISS ───────────    │  (flow_2)
+  │  ◄──── CUSTOM ────────────    │  (intentflow.dismiss: flow_2)
   │                               │
-  │  ◄──── PROPS_UPDATE ──────    │  (flow_1 with new item)
+  │  ◄──── CUSTOM ────────────    │  (intentflow.props_update: flow_1)
   │                               │
 ```
 
@@ -206,100 +250,70 @@ Mutation fails, user retries.
 ```
 Client                          Server
   │                               │
-  │  ──── EVENT (CONFIRM) ────►   │
+  │  ──── CUSTOM ─────────────►   │  (intentflow.event: CONFIRM)
   │                               │
-  │  ◄──── TRANSITION ────────    │  (→ processing)
+  │  ◄──── CUSTOM ────────────    │  (intentflow.transition → processing)
   │                               │
-  │  ◄──── TRANSITION ────────    │  (→ error)
+  │  ◄──── CUSTOM ────────────    │  (intentflow.transition → error)
   │       context: {              │
   │         errorMessage: "..."   │
   │       }                       │
   │                               │
-  │  ──── EVENT (RETRY) ──────►   │
+  │  ──── CUSTOM ─────────────►   │  (intentflow.event: RETRY)
   │                               │
-  │  ◄──── TRANSITION ────────    │  (→ processing)
+  │  ◄──── CUSTOM ────────────    │  (intentflow.transition → processing)
   │                               │
-  │  ◄──── TRANSITION ────────    │  (→ success)
+  │  ◄──── CUSTOM ────────────    │  (intentflow.transition → success)
   │                               │
 ```
 
 ## Versioning
 
-The protocol uses semantic versioning. The `version` field in messages indicates protocol version.
+IntentFlow follows semantic versioning for its custom event schemas. AG-UI protocol versioning is handled separately by the AG-UI specification.
+
+### IntentFlow Event Versions
 
 ```json
 {
-  "type": "RENDER",
-  "version": "1.0",
-  ...
+  "type": "CUSTOM",
+  "name": "intentflow.render",
+  "value": {
+    "version": "1.0",
+    "intentId": "order.place",
+    ...
+  }
 }
 ```
 
 ### Compatibility Rules
 
-- **Patch versions** (1.0.x): Bug fixes, no message changes
+- **Patch versions** (1.0.x): Bug fixes, no schema changes
 - **Minor versions** (1.x.0): New optional fields, backward compatible
-- **Major versions** (x.0.0): Breaking changes, negotiation required
-
-### Version Negotiation
-
-Clients declare supported versions at connection:
-
-```json
-{
-  "type": "HANDSHAKE",
-  "supportedVersions": ["1.0", "1.1"],
-  "preferredVersion": "1.1"
-}
-```
-
-Server responds with selected version:
-
-```json
-{
-  "type": "HANDSHAKE_ACK",
-  "selectedVersion": "1.0",
-  "serverCapabilities": ["streaming", "nested_flows"]
-}
-```
+- **Major versions** (x.0.0): Breaking changes require client updates
 
 ## Security Considerations
 
 ### Message Validation
 
-All incoming messages are validated:
+All incoming events are validated at both AG-UI and IntentFlow levels:
 
 ```typescript
-// Server validates client events
-const event = eventSchema.safeParse(message)
-if (!event.success) {
-  return { type: 'ERROR', code: 'INVALID_MESSAGE', details: event.error }
+// Server validates IntentFlow custom event payloads
+const payload = renderPayloadSchema.safeParse(event.value)
+if (!payload.success) {
+  // Send AG-UI error event
+  return { type: 'ERROR', message: 'Invalid IntentFlow payload' }
 }
 
 // Verify event is valid for current Flow state
-if (!flow.machine.can(event.data.event)) {
-  return { type: 'ERROR', code: 'INVALID_TRANSITION' }
+if (!flow.machine.can(payload.data.event)) {
+  return { type: 'ERROR', message: 'Invalid state transition' }
 }
 ```
 
 ### Authentication
 
-Session authentication is transport-layer concern, but the protocol supports auth context:
-
-```json
-{
-  "type": "RENDER",
-  "intentId": "account.settings",
-  "auth": {
-    "userId": "user_123",
-    "roles": ["customer"],
-    "permissions": ["read:account", "write:account"]
-  },
-  ...
-}
-```
-
-Flows can check permissions:
+Authentication is handled at the AG-UI/transport layer. IntentFlow adds Flow-level permission checking:
 
 ```typescript
 defineFlow({
@@ -310,9 +324,18 @@ defineFlow({
 })
 ```
 
+The server validates permissions before rendering:
+
+```typescript
+// Check permissions before hydrating
+if (!hasPermissions(user, flow.permissions.required)) {
+  throw new FlowError('PERMISSION_DENIED')
+}
+```
+
 ### Prop Sanitization
 
-Props are validated against schemas. Clients should never trust raw prop data for:
+Props are validated against Zod schemas. Clients should never trust raw prop data for:
 - Rendering HTML (XSS risk)
 - Constructing URLs
 - Executing code

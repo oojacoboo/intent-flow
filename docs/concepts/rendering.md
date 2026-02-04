@@ -2,6 +2,8 @@
 
 IntentFlow separates **what** to render (server decision) from **how** to render it (client implementation). This separation enables a single Flow definition to produce native experiences across mobile, web, and agent interfaces.
 
+IntentFlow uses [A2UI](https://github.com/nickarls/A2UI) concepts for declarative UI components that can be rendered natively on each platform.
+
 ## The Rendering Model
 
 ```
@@ -30,7 +32,7 @@ IntentFlow separates **what** to render (server decision) from **how** to render
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-The server emits a `RENDER` instruction with an `intentId` and `props`. Each client looks up its own implementation of that Flow and renders it appropriately for its platform.
+The server emits AG-UI events containing IntentFlow payloads with `intentId` and `props`. Each client looks up its own implementation of that Flow and renders it appropriately for its platform using A2UI-compatible components.
 
 ## Universal Components
 

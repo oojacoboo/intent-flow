@@ -1,6 +1,6 @@
 # IntentFlow
 
-**A Protocol for AI-Orchestrated Applications**
+**A Framework for AI-Orchestrated Applications**
 
 > Build applications where AI orchestrates real UI—not hallucinated widgets.
 
@@ -32,7 +32,7 @@ We're building AI into our applications wrong.
 
 ## The Solution
 
-**IntentFlow** is a protocol that lets AI orchestrate your real application UI.
+**IntentFlow** is a framework that lets AI orchestrate your real application UI, built on top of the [AG-UI Protocol](https://docs.ag-ui.com) and [A2UI](https://github.com/nickarls/A2UI) standards.
 
 ```
 User: "Order my usual"
@@ -67,6 +67,32 @@ The AI doesn't generate UI—it **selects** from pre-built, type-safe Flows you 
 
 ## How It Works
 
+### The Protocol Stack
+
+IntentFlow doesn't reinvent the wheel—it builds on proven protocols:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           INTENTFLOW                                        │
+│            Flows, Schemas (Zod), State Machines (XState), Registry          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                              AG-UI                                          │
+│            Agent↔User runtime protocol (events, streaming, state)           │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                              A2UI                                           │
+│            Declarative UI format (JSON → components)                        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                     TRANSPORT (MCP / A2A / HTTP)                            │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+| Layer | What It Does | Standard |
+|-------|--------------|----------|
+| **IntentFlow** | Flow orchestration, schemas, state machines | This framework |
+| **AG-UI** | Runtime protocol for agent↔frontend communication | [AG-UI Protocol](https://docs.ag-ui.com) |
+| **A2UI** | Declarative JSON format for UI rendering | [A2UI Spec](https://github.com/nickarls/A2UI) |
+| **Transport** | Wire protocol for data transfer | MCP, A2A, HTTP |
+
 ### The Architecture
 
 ```mermaid
@@ -83,8 +109,8 @@ flowchart TB
         registry --> hydrate
     end
 
-    subgraph Protocol ["JSON Protocol (The Wire)"]
-        msg["{ type: RENDER, intentId: order.place, props: {...} }"]
+    subgraph Protocol ["AG-UI + A2UI Protocol"]
+        msg["AG-UI events with A2UI components"]
     end
 
     subgraph Body ["Clients (The Body)"]
@@ -103,7 +129,7 @@ flowchart TB
 | Layer | Responsibility |
 |-------|----------------|
 | **Brain** | AI matches intents, fetches data, manages state |
-| **Wire** | JSON protocol defines what to render—not how |
+| **Protocol** | AG-UI handles events; A2UI defines UI structure |
 | **Body** | Native UI per platform (mobile, web, MCP) |
 
 ### The Flow
@@ -153,25 +179,36 @@ export function PlaceOrderFlow() {
 }
 ```
 
-### The Protocol Message
+### The Protocol Flow
 
-The server sends JSON instructions—not HTML, not code:
+IntentFlow uses AG-UI events to communicate between server and client:
 
 ```json
 {
-  "type": "RENDER",
-  "intentId": "order.place",
-  "instanceId": "flow_abc123",
-  "props": {
-    "items": [{ "name": "Cappuccino", "size": "large", "price": 4.50 }],
-    "location": { "name": "123 Main St", "estimatedTime": 8 },
-    "paymentMethods": [{ "id": "pm_1", "label": "Visa ••4242" }]
-  },
-  "displayMode": "fullscreen"
+  "type": "RUN_STARTED",
+  "threadId": "thread_123",
+  "runId": "run_456"
 }
 ```
 
-The client looks up `order.place` in its component registry and renders your real UI.
+```json
+{
+  "type": "CUSTOM",
+  "name": "intentflow.render",
+  "value": {
+    "intentId": "order.place",
+    "instanceId": "flow_abc123",
+    "props": {
+      "items": [{ "name": "Cappuccino", "size": "large", "price": 4.50 }],
+      "location": { "name": "123 Main St", "estimatedTime": 8 },
+      "paymentMethods": [{ "id": "pm_1", "label": "Visa ••4242" }]
+    },
+    "displayMode": "fullscreen"
+  }
+}
+```
+
+The client receives the AG-UI event, looks up `order.place` in its component registry, and renders your real UI using A2UI-compatible components.
 
 ---
 
@@ -242,22 +279,24 @@ One Flow definition renders appropriately on every platform:
 
 | Layer | Technology |
 |-------|------------|
-| Schemas | [Zod](https://zod.dev) — Runtime validation |
-| State Machines | [XState](https://xstate.js.org) — Finite state logic |
-| Universal UI | [Tamagui](https://tamagui.dev) or React Native Web |
-| AI Orchestration | Vercel AI SDK, LangChain, or direct LLM APIs |
-| Transport | HTTP, WebSocket, SSE, or MCP |
+| **Protocol** | [AG-UI](https://docs.ag-ui.com) — Agent↔User communication |
+| **UI Format** | [A2UI](https://github.com/nickarls/A2UI) — Declarative UI components |
+| **Schemas** | [Zod](https://zod.dev) — Runtime validation |
+| **State Machines** | [XState](https://xstate.js.org) — Finite state logic |
+| **Universal UI** | [Tamagui](https://tamagui.dev) or React Native Web |
+| **AI Orchestration** | Vercel AI SDK, LangChain, or direct LLM APIs |
+| **Transport** | MCP, HTTP, WebSocket, or SSE |
 
-### Protocol Messages
+### AG-UI Events (Extended by IntentFlow)
 
-| Message | Direction | Purpose |
-|---------|-----------|---------|
-| `RENDER` | Server → Client | Display a Flow |
-| `TRANSITION` | Server → Client | Update Flow state |
-| `PROPS_UPDATE` | Server → Client | Patch props (streaming) |
-| `EVENT` | Client → Server | User interaction |
-| `DISMISS` | Server → Client | Remove a Flow |
-| `ERROR` | Server → Client | Error with recovery options |
+| Event | Direction | Purpose |
+|-------|-----------|---------|
+| `RUN_STARTED` | Server → Client | Agent run begins |
+| `intentflow.render` | Server → Client | Display a Flow (custom event) |
+| `intentflow.transition` | Server → Client | Update Flow state (custom event) |
+| `STATE_SNAPSHOT` | Server → Client | Full state sync |
+| `CUSTOM` | Bidirectional | IntentFlow-specific events |
+| `RUN_FINISHED` | Server → Client | Agent run completes |
 
 ### Flow Lifecycle
 
