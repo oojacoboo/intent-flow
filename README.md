@@ -2,7 +2,7 @@
 
 ### Map Natural Language (Intent) to UI Flows.
 
-**A Framework for AI-Orchestrated Applications.**
+**A Framework and Protocol for AI-Orchestrated Applications.**
 
 ---
 
