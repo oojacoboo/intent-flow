@@ -335,6 +335,7 @@ Deep-dive into the concepts, protocol, and implementation guides:
 - **[Building Flows](./docs/guides/building-flows.md)** — Step-by-step tutorial
 - **[AI Orchestration](./docs/guides/ai-orchestration.md)** — LLM integration patterns
 - **[MCP Integration](./docs/guides/mcp-integration.md)** — Claude/ChatGPT tools
+- **[Testing](./docs/guides/testing.md)** — Testing strategy for schemas, state machines, and registry
 
 ---
 
@@ -349,11 +350,36 @@ We're defining the protocol, APIs, and reference patterns. Implementation packag
 - [x] Core specification
 - [x] Protocol message format
 - [x] Documentation
+- [x] Testing framework (48 unit tests + 8 E2E tests)
+- [x] Demo app with 3 example Flows
 - [ ] `@intentflow/core` — Schema and state machine utilities
 - [ ] `@intentflow/react` — React bindings and hooks
 - [ ] `@intentflow/ui` — Universal component primitives
 - [ ] `@intentflow/mcp` — MCP server adapter
 - [ ] Reference implementation
+
+### Testing
+
+The spec examples are validated with a full test suite:
+
+```bash
+npm install
+npm test                    # 48 unit tests (vitest) — schemas, state machines, registry
+npm run test:e2e            # 8 E2E tests (playwright) — full intent→render pipeline
+npm run test:e2e:headed     # E2E with visible browser
+npm run test:e2e:debug      # Step-through debugging
+npm run demo                # Run demo app at localhost:3847
+```
+
+| Layer | Tests | What it validates |
+|-------|-------|-------------------|
+| Schema (Zod) | 16 | Valid props, boundary values, type safety, defaults |
+| State Machine (XState) | 19 | Transitions, happy path, error recovery, invalid events |
+| Intent Extraction | 10 | Entity parsing, defaults, required vs optional fields |
+| Registry | 9 | Lookup, filtering, duplicate prevention, AI tool generation, constraints |
+| E2E (Playwright) | 8 | Full intent→render pipeline, registry blocking, payment lifecycle |
+
+See **[Testing Guide](./docs/guides/testing.md)** for the full testing strategy.
 
 ### Get Involved
 
