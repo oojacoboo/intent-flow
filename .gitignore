@@ -4,3 +4,15 @@
 
 # Configs
 .claude/settings.local.json
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Vitest
+.vite/
+
+# Playwright
+test-results/

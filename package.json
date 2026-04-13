@@ -1,0 +1,31 @@
+{
+  "name": "intentflow",
+  "version": "1.0.0",
+  "description": "**A Framework for AI-Orchestrated Applications**",
+  "type": "module",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "npx playwright test",
+    "test:e2e:headed": "npx playwright test --headed",
+    "test:e2e:debug": "npx playwright test --debug",
+    "demo": "node demo/server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@playwright/test": "^1.59.1",
+    "@types/node": "^25.6.0",
+    "express": "^5.2.1",
+    "playwright": "^1.59.1",
+    "typescript": "^6.0.2",
+    "vitest": "^4.1.4",
+    "xstate": "^5.30.0",
+    "zod": "^4.3.6"
+  }
+}

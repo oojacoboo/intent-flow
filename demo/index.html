@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IntentFlow Demo</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 40px 20px; }
+    h1 { font-size: 24px; margin-bottom: 8px; color: #f8fafc; }
+    .subtitle { color: #94a3b8; margin-bottom: 32px; font-size: 14px; }
+    .input-area { width: 100%; max-width: 600px; display: flex; gap: 8px; margin-bottom: 24px; }
+    #intent-input { flex: 1; padding: 12px 16px; border-radius: 8px; border: 1px solid #334155; background: #1e293b; color: #f8fafc; font-size: 16px; outline: none; }
+    #intent-input:focus { border-color: #3b82f6; }
+    #submit-btn { padding: 12px 24px; border-radius: 8px; border: none; background: #3b82f6; color: white; font-size: 16px; cursor: pointer; }
+    #submit-btn:hover { background: #2563eb; }
+    #flow-container { width: 100%; max-width: 600px; }
+    .flow-card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 24px; margin-bottom: 16px; }
+    .flow-card h2 { font-size: 20px; margin-bottom: 4px; }
+    .flow-card .intent-id { color: #3b82f6; font-size: 12px; font-family: monospace; margin-bottom: 16px; }
+    .flow-card table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+    .flow-card th, .flow-card td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #334155; }
+    .flow-card th { color: #94a3b8; font-size: 13px; font-weight: 500; }
+    .amount { color: #f87171; font-weight: 600; }
+    .days-late { color: #fb923c; }
+    .btn { padding: 10px 20px; border-radius: 6px; border: none; font-size: 14px; cursor: pointer; margin-right: 8px; margin-top: 8px; }
+    .btn-primary { background: #3b82f6; color: white; }
+    .btn-primary:hover { background: #2563eb; }
+    .btn-secondary { background: #334155; color: #e2e8f0; }
+    .btn-secondary:hover { background: #475569; }
+    .btn-danger { background: #dc2626; color: white; }
+    .btn-danger:hover { background: #b91c1c; }
+    .error-msg { background: #7f1d1d; border: 1px solid #dc2626; border-radius: 8px; padding: 16px; color: #fca5a5; }
+    .success-msg { background: #14532d; border: 1px solid #22c55e; border-radius: 8px; padding: 16px; color: #86efac; }
+    .state-badge { display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; margin-bottom: 12px; }
+    .state-reviewing { background: #1e3a5f; color: #60a5fa; }
+    .state-processing { background: #3b2f12; color: #fbbf24; }
+    .state-confirmed { background: #14532d; color: #4ade80; }
+    .state-error { background: #7f1d1d; color: #f87171; }
+    .state-cancelled { background: #334155; color: #94a3b8; }
+    .payment-info { background: #0f172a; border-radius: 8px; padding: 16px; margin: 12px 0; }
+    .payment-total { font-size: 32px; font-weight: 700; color: #f8fafc; }
+    .spinner { display: inline-block; width: 20px; height: 20px; border: 3px solid #334155; border-top: 3px solid #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 8px; vertical-align: middle; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .no-match { color: #94a3b8; text-align: center; padding: 40px; }
+  </style>
+</head>
+<body>
+  <h1>IntentFlow Demo</h1>
+  <p class="subtitle">Type what you want to do in natural language</p>
+
+  <div class="input-area">
+    <input type="text" id="intent-input" placeholder='Try: "who hasn\'t paid rent?" or "pay my rent" or "something is broken in 4B"' autofocus>
+    <button id="submit-btn">Go</button>
+  </div>
+
+  <div id="flow-container"></div>
+
+  <script>
+    const input = document.getElementById('intent-input')
+    const btn = document.getElementById('submit-btn')
+    const container = document.getElementById('flow-container')
+    let currentState = null
+    let currentIntentId = null
+
+    btn.addEventListener('click', submitIntent)
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') submitIntent() })
+
+    async function submitIntent() {
+      const text = input.value.trim()
+      if (!text) return
+
+      const res = await fetch('/api/intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ input: text }),
+      })
+      const result = await res.json()
+
+      if (!result.success) {
+        container.innerHTML = `<div class="no-match" data-testid="no-match">${result.message}</div>`
+        return
+      }
+
+      currentIntentId = result.intentId
+      renderFlow(result)
+      input.value = ''
+    }
+
+    function renderFlow(result) {
+      const { intentId, flow, data } = result
+
+      switch (intentId) {
+        case 'payments.overdue':
+          renderOverdue(flow, data)
+          break
+        case 'payments.submit':
+          currentState = 'reviewing'
+          renderPayment(flow, data)
+          break
+        case 'maintenance.create':
+          currentState = 'filling'
+          renderMaintenance(flow, data)
+          break
+      }
+    }
+
+    function renderOverdue(flow, data) {
+      const rows = data.tenants.map(t => `
+        <tr>
+          <td>${t.name}</td>
+          <td>${t.unit}</td>
+          <td class="amount">$${t.amount.toLocaleString()}</td>
+          <td class="days-late">${t.daysLate} days</td>
+        </tr>
+      `).join('')
+
+      container.innerHTML = `
+        <div class="flow-card" data-testid="flow-card">
+          <h2>${flow.title}</h2>
+          <div class="intent-id">${'payments.overdue'}</div>
+          <table>
+            <thead><tr><th>Tenant</th><th>Unit</th><th>Amount</th><th>Days Late</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+          <p style="color: #64748b; font-size: 13px; margin-top: 12px;">As of ${data.asOf}</p>
+        </div>
+      `
+    }
+
+    function renderPayment(flow, data) {
+      container.innerHTML = `
+        <div class="flow-card" data-testid="flow-card">
+          <h2>${flow.title}</h2>
+          <div class="intent-id">${'payments.submit'}</div>
+          <span class="state-badge state-${currentState}" data-testid="state-badge">${currentState}</span>
+          ${renderPaymentState(data)}
+        </div>
+      `
+    }
+
+    function renderPaymentState(data) {
+      switch (currentState) {
+        case 'reviewing':
+          return `
+            <div class="payment-info">
+              <p style="color: #94a3b8;">Amount Due</p>
+              <div class="payment-total" data-testid="payment-amount">$${data.amount.toLocaleString()}</div>
+              <p style="color: #64748b; margin-top: 8px;">${data.tenantName} · Unit ${data.unit}</p>
+            </div>
+            <button class="btn btn-primary" data-testid="pay-now-btn" onclick="transition('PAY_NOW')">Pay Now</button>
+            <button class="btn btn-secondary" data-testid="cancel-btn" onclick="transition('CANCEL')">Cancel</button>
+          `
+        case 'processing':
+          return `<p><span class="spinner"></span> Processing payment...</p>`
+        case 'confirmed':
+          return `<div class="success-msg" data-testid="success-msg">Payment Confirmed! $${data.amount.toLocaleString()} paid for Unit ${data.unit}.</div>`
+        case 'error':
+          return `
+            <div class="error-msg" data-testid="error-msg">Payment Failed — Card declined</div>
+            <button class="btn btn-primary" data-testid="retry-btn" onclick="transition('RETRY')">Retry</button>
+            <button class="btn btn-secondary" data-testid="cancel-btn" onclick="transition('CANCEL')">Cancel</button>
+          `
+        case 'cancelled':
+          return `<div data-testid="cancelled-msg" style="color: #94a3b8;">Payment cancelled.</div>`
+      }
+    }
+
+    function renderMaintenance(flow, data) {
+      container.innerHTML = `
+        <div class="flow-card" data-testid="flow-card">
+          <h2>${flow.title}</h2>
+          <div class="intent-id">${'maintenance.create'}</div>
+          <span class="state-badge state-filling" data-testid="state-badge">filling</span>
+          <div style="margin-top: 12px;">
+            <label style="color: #94a3b8; font-size: 13px;">Unit</label>
+            <select style="width: 100%; padding: 8px; margin: 4px 0 12px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #f8fafc;">
+              ${data.units.map(u => `<option>${u}</option>`).join('')}
+            </select>
+            <label style="color: #94a3b8; font-size: 13px;">Category</label>
+            <select style="width: 100%; padding: 8px; margin: 4px 0 12px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #f8fafc;">
+              ${data.categories.map(c => `<option>${c}</option>`).join('')}
+            </select>
+            <label style="color: #94a3b8; font-size: 13px;">Description</label>
+            <textarea data-testid="description-input" style="width: 100%; padding: 8px; margin: 4px 0 12px; background: #0f172a; border: 1px solid #334155; border-radius: 6px; color: #f8fafc; min-height: 80px;" placeholder="Describe the issue..."></textarea>
+            <button class="btn btn-primary" data-testid="submit-btn" onclick="transition('SUBMIT')">Submit Work Order</button>
+            <button class="btn btn-secondary" data-testid="cancel-btn" onclick="transition('CANCEL')">Cancel</button>
+          </div>
+        </div>
+      `
+    }
+
+    async function transition(event) {
+      // Simulate processing delay
+      if (event === 'PAY_NOW' || event === 'SUBMIT' || event === 'RETRY') {
+        currentState = 'processing'
+        rerenderCurrentFlow()
+        // Simulate success/failure after delay
+        await new Promise(r => setTimeout(r, 1000))
+        // 70% success rate for demo
+        const outcome = Math.random() > 0.3 ? 'SUCCESS' : 'FAILURE'
+        const res = await fetch('/api/transition', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ intentId: currentIntentId, currentState: 'processing', event: outcome }),
+        })
+        const result = await res.json()
+        currentState = result.newState
+        rerenderCurrentFlow()
+        return
+      }
+
+      const res = await fetch('/api/transition', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ intentId: currentIntentId, currentState, event }),
+      })
+      const result = await res.json()
+      if (result.success) {
+        currentState = result.newState
+        rerenderCurrentFlow()
+      }
+    }
+
+    function rerenderCurrentFlow() {
+      // Re-fetch isn't needed for demo — just re-render with mock data
+      const data = currentIntentId === 'payments.submit'
+        ? { title: 'Pay Rent', description: 'Submit a rent payment' }
+        : { title: 'Create Work Order', description: 'Submit a maintenance request' }
+
+      const mockData = currentIntentId === 'payments.submit'
+        ? { amount: 1200, tenantName: 'Aaron Downing', unit: '3C' }
+        : {}
+
+      const card = document.querySelector('.flow-card')
+      if (!card) return
+
+      const badge = card.querySelector('[data-testid="state-badge"]')
+      if (badge) {
+        badge.textContent = currentState
+        badge.className = `state-badge state-${currentState}`
+      }
+
+      // Replace content after badge
+      const h2 = card.querySelector('h2')
+      const intentIdEl = card.querySelector('.intent-id')
+      const badgeEl = card.querySelector('[data-testid="state-badge"]')
+
+      let stateHtml = ''
+      if (currentIntentId === 'payments.submit') {
+        stateHtml = renderPaymentState(mockData)
+      }
+
+      card.innerHTML = `
+        <h2>${h2?.textContent || ''}</h2>
+        <div class="intent-id">${currentIntentId}</div>
+        <span class="state-badge state-${currentState}" data-testid="state-badge">${currentState}</span>
+        ${stateHtml}
+      `
+    }
+  </script>
+</body>
+</html>
